@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<!--
+
+/*******************************
+* ZK-80 web written by Katsumi *
+*   This script is released    *
+*     under the LGPL v2.1.     *
+*******************************/
+
+-->
+<head>
+	<meta charset="UTF-8" />
+	<link rel="stylesheet" type="text/css" href="./style.css" />
+	<!-- HTML5 functions -->
+	<script type="text/javascript" src="./get.js"></script>
+	<script type="text/javascript" src="./dom.js"></script>
+	<script type="text/javascript" src="./display.js"></script>
+	<!-- Load Z80 CPU emulator -->
+	<script type="text/javascript" src="./z80.js"></script>
+	<script type="text/javascript" src="./z80functions.js"></script>
+	<!-- Intel 8080 support (optional) -->
+	<script type="text/javascript" src="./i8080.js"></script>
+	<!-- Load TK-80 environment -->
+	<script type="text/javascript" src="./memory.js"></script>
+	<script type="text/javascript" src="./io.js"></script>
+	<script type="text/javascript" src="./file.js"></script>
+	<!-- Load MONITOR program -->
+	<script type="text/javascript" src="./rom.js"></script>
+	<!-- Load Debug scripts (opitional) -->
+	<script type="text/javascript" src="./debug.js"></script>
+	<title>ZK-80 web v0.4</title>
+</head>
+<body>
+	<div><canvas id="led8" width="306" height="50"></canvas></div>
+	<div>
+		<div>
+		<span>STEP<img id="tgswitch" src="./right.gif" width="32" height="30" alt="toggle" onclick="dom.clickToggle(this);"/>AUTO</span>
+		&nbsp;
+		<span>PROTECT<img id="tgswitch2" src="./right.gif" width="32" height="30" alt="toggle" onclick="dom.clickToggle2(this);"/>ENABLE</span>
+		</div>
+		<span id="speed">clock: 2048000 hz</span>
+	</div>
+	<div><canvas id="keypad" width="280" height="280"></canvas></div>
+	<div>
+		<span><input class="file" id="load" type="file" onchange="file.browse(this);" /></span>
+		<a class="file" id="save" href="data:application/octet-stream,test+OK">Save</a>
+		<audio id="sounddown" preload="auto">
+		   <source src="./down.mp3" type="audio/mp3">
+		   <source src="./down.ogg" type="audio/ogg">
+		   <p>Audio not supported in your browser.</p>
+		</audio>
+		<audio id="soundup" preload="auto">
+		   <source src="./up.mp3" type="audio/mp3">
+		   <source src="./up.ogg" type="audio/ogg">
+		</audio>
+		<audio id="toggle" preload="auto">
+		   <source src="./toggle.mp3" type="audio/mp3">
+		   <source src="./toggle.ogg" type="audio/ogg">
+		</audio>
+	</div>
+	<!-- Debug buttons -->
+	<div class="debug" style="width: 320px;">
+		<input value="Step" type="button" onclick="dom.clickStep();" />
+		<input value="Cont." type="button" onclick="dom.clickCont();" />
+		<input value="Stop at" type="button" onclick="dom.clickStopAt();" />
+		<input value="Log to" type="button" onclick="dom.clickLogTo();" />
+		<input value="Dump" type="button" onclick="dom.clickDump();" />
+	</div>
+	<!-- Debug output -->
+	<div class="debug" id="debug"></div>
+	<pre class="debug" id="displaylog"></pre>
+	<pre class="debug" id="dump"></pre>
+	<!-- Load Main -->
+	<script type="text/javascript" src="./main.js"></script>
+	<!-- Iniliarizing display will start everything. -->
+	<script type="text/javascript">
+		dom.getElement("load").value="";
+		display.init();
+	</script>
+</body>
+</html>

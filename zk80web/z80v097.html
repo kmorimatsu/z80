@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>JavaScript tiny assembler for PACHIPACHI computer v0.95</title>
+<!-- This program is released under the GPL (v2) license by Katsumi. -->
+</head>
+<script type="text/javascript">
+function syncScroll(){
+	if (!this.lt) {
+		this.lt=document.getElementById('lefttext');
+		this.ct=document.getElementById('centertext');
+		this.rt=document.getElementById('righttext');
+		if (document.body.clientHeight) this.lt.style.height=document.body.clientHeight-40;
+		else this.lt.style.height=window.innerHeight-20;
+		this.ct.style.height=this.lt.style.height;
+		this.rt.style.height=this.lt.style.height;
+	}
+	this.ct.scrollTop=this.lt.scrollTop;
+	this.rt.scrollTop=this.lt.scrollTop;
+
+}
+function leftoc(event){
+	var timestamp=parseInt((new Date())/1000);
+	if (event.keyCode!=13 && timestamp==this.timestamp) return;
+	this.timestamp=timestamp;
+	preassemble();
+}
+function preassemble(){
+	var lt=document.getElementById('lefttext');
+	var ct=document.getElementById('centertext');
+	var rt=document.getElementById('righttext');
+	// First round assemble
+	var labels=[];
+	t=assemble(lt,ct,rt,labels);
+	// Second round assemble
+	t=assemble(lt,ct,rt,labels);
+	syncScroll();
+}
+function assemble(lt,ct,rt,labels){
+	var re;
+	var t=''+lt.value;
+	// Remove comments
+	t=t.replace(/(;|#|\/\/).*/g,"");
+	while(1) {
+		re=t.match(/\/\*[\s\S]*?\*\//);
+		if (!re) break;
+		t=t.replace(/\/\*[\s\S]*?\*\//,re[0].replace(/[^\r\n]+/g,""));
+	}
+	// Change ascii to code
+	while(1) {
+		re=t.match(/"(\\.|[^"])+"/);
+		if (!re) break;
+		re=re[0].substr(1,re[0].length-2);
+		var replace="";
+		while (re.length) {
+			if (re.substr(0,2)=="\\x") {
+				replace+=re.substr(2,4)+" ";
+				re=re.substr(4);
+			} else if (re.substr(0,2)=="\\\\") {
+				replace+="5C ";
+				re=re.substr(2);
+			} else if (re.substr(0,1)=="\\") {
+				re=re.substr(1);
+			} else {
+				replace+=("0"+re.charCodeAt(0).toString(16).toUpperCase()).substr(-2)+" ";
+				re=re.substr(1);
+			}
+		}
+		replace=replace.substr(0,replace.length-1);
+		t=t.replace(/"(\\\\|\\"|[^"])+"/,replace);
+	}
+	// Prepare for result
+ 	var result='';
+	var result2='';
+	var address='0000';
+	// Do it step by step
+	re=t.match(/(.*)(\r?\n?)/g);
+	for(var i=0;i<re.length;i++){
+		t=re[i].replace(/(^\s+|\s+$)/g,'');
+		t=t.replace(/(\s+)/g,' ');
+		t=t.replace(/(\s*,\s*)/g,',');
+		t=t.toUpperCase();
+		var source=t;
+		t=retmac(source,labels,address);
+		// Solve the address
+		var re2=t.match(/^\([0-9A-F][0-9A-F][0-9A-F][0-9A-F]\)$/);
+		if (re2) address=re2[0].substr(1,4);
+		if (t=='(-)') {
+			// This is a label.
+			t='('+address+')';
+			labels[source]=address;
+		}
+		// 2 digit conversion
+		re2=t.match(/^([0-9A-F][0-9A-F](\s+|$))+$/);
+		if (re2) re2=t.match(/(^|\s+)([0-9A-F][0-9A-F])/g);
+		if (re2) for(var j=0;j<re2.length;j++){
+			var t2=re2[j];
+			t2=t2.replace(/0/g,'0000');
+			t2=t2.replace(/1/g,'0001');
+			t2=t2.replace(/2/g,'0010');
+			t2=t2.replace(/3/g,'0011');
+			t2=t2.replace(/4/g,'0100');
+			t2=t2.replace(/5/g,'0101');
+			t2=t2.replace(/6/g,'0110');
+			t2=t2.replace(/7/g,'0111');
+			t2=t2.replace(/8/g,'1000');
+			t2=t2.replace(/9/g,'1001');
+			t2=t2.replace(/A/g,'1010');
+			t2=t2.replace(/B/g,'1011');
+			t2=t2.replace(/C/g,'1100');
+			t2=t2.replace(/D/g,'1101');
+			t2=t2.replace(/E/g,'1110');
+			t2=t2.replace(/F/g,'1111');
+			result2+=t2;
+			address=incaddr(address);
+		}
+		result+=t+"\n";
+		result2+="\n";
+	}
+	ct.value=result;
+	rt.value=result2;
+	rt.setAttribute("scrollTop",lt.scrollTop);
+}
+function inc16(d){
+	return "123456789ABCDEF0".substr("0123456789ABCDEF".indexOf(d,0),1);
+}
+function incaddr(address){
+	var a0=address.substr(3,1);
+	var a1=address.substr(2,1);
+	var a2=address.substr(1,1);
+	var a3=address.substr(0,1);
+	if ((a0=inc16(a0))=='0')
+		if ((a1=inc16(a1))=='0')
+			if ((a2=inc16(a2))=='0')
+				if ((a3=inc16(a3))=='0') a0='0';
+	return ''+a3+a2+a1+a0;
+}
+function retmac(code,labels,address){
+	var re;
+	// Change (IX-01) etc
+	re=code.match(/(I[XY])\-([0-7][0-9A-F])/);
+	if (re) {
+		code=code.replace(/I[XY]\-([0-7][0-9A-F])/,re[1]+"+"+(256-parseInt(re[2],16)).toString(16).toUpperCase());
+	}
+	// If only byte code, just return.
+	re=code.match(/^([0-9A-F][0-9A-F]\s*)+$/);
+	if (re) {
+		return code.replace(/([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/g,"$2 $1");
+	}
+	switch(code){
+		case 'NOP':        return '00';
+		case 'LD (BC),A':  return '02';
+		case 'INC BC':     return '03';
+		case 'INC B':      return '04';
+		case 'DEC B':      return '05';
+		case 'RLCA':       return '07';
+		case "EX AF,AF'":  return '08';
+		case 'ADD HL,BC':  return '09';
+		case 'LD A,(BC)':  return '0A';
+		case 'DEC BC':     return '0B';
+		case 'INC C':      return '0C';
+		case 'DEC C':      return '0D';
+		case 'RRCA':       return '0F';
+		case 'DJNZ e':     return '10';
+		case 'LD (DE),A':  return '12';
+		case 'INC DE':     return '13';
+		case 'INC D':      return '14';
+		case 'DEC D':      return '15';
+		case 'RLA':        return '17';
+		case 'JR e':       return '18';
+		case 'ADD HL,DE':  return '19';
+		case 'LD A,(DE)':  return '1A';
+		case 'DEC DE':     return '1B';
+		case 'INC E':      return '1C';
+		case 'DEC E':      return '1D';
+		case 'RRA':        return '1F';
+		case 'JR NZ,e':    return '20';
+		case 'INC HL':     return '23';
+		case 'INC H':      return '24';
+		case 'DEC H':      return '25';
+		case 'DAA':        return '27';
+		case 'JR Z,e':     return '28';
+		case 'ADD HL,HL':  return '29';
+		case 'DEC HL':     return '2B';
+		case 'INC L':      return '2C';
+		case 'DEC L':      return '2D';
+		case 'CPL':        return '2F';
+		case 'JR NC,e':    return '30';
+		case 'INC SP':     return '33';
+		case 'INC (HL)':   return '34';
+		case 'DEC (HL)':   return '35';
+		case 'SCF':        return '37';
+		case 'JR C,e':     return '38';
+		case 'ADD HL,SP':  return '39';
+		case 'DEC SP':     return '3B';
+		case 'INC A':      return '3C';
+		case 'DEC A':      return '3D';
+		case 'CCF':        return '3F';
+		case 'LD B,B':     return '40';
+		case 'LD B,C':     return '41';
+		case 'LD B,D':     return '42';
+		case 'LD B,E':     return '43';
+		case 'LD B,H':     return '44';
+		case 'LD B,L':     return '45';
+		case 'LD B,(HL)':  return '46';
+		case 'LD B,A':     return '47';
+		case 'LD C,B':     return '48';
+		case 'LD C,C':     return '49';
+		case 'LD C,D':     return '4A';
+		case 'LD C,E':     return '4B';
+		case 'LD C,H':     return '4C';
+		case 'LD C,L':     return '4D';
+		case 'LD C,(HL)':  return '4E';
+		case 'LD C,A':     return '4F';
+		case 'LD D,B':     return '50';
+		case 'LD D,C':     return '51';
+		case 'LD D,D':     return '52';
+		case 'LD D,E':     return '53';
+		case 'LD D,H':     return '54';
+		case 'LD D,L':     return '55';
+		case 'LD D,(HL)':  return '56';
+		case 'LD D,A':     return '57';
+		case 'LD E,B':     return '58';
+		case 'LD E,C':     return '59';
+		case 'LD E,D':     return '5A';
+		case 'LD E,E':     return '5B';
+		case 'LD E,H':     return '5C';
+		case 'LD E,L':     return '5D';
+		case 'LD E,(HL)':  return '5E';
+		case 'LD E,A':     return '5F';
+		case 'LD H,B':     return '60';
+		case 'LD H,C':     return '61';
+		case 'LD H,D':     return '62';
+		case 'LD H,E':     return '63';
+		case 'LD H,H':     return '64';
+		case 'LD H,L':     return '65';
+		case 'LD H,(HL)':  return '66';
+		case 'LD H,A':     return '67';
+		case 'LD L,B':     return '68';
+		case 'LD L,C':     return '69';
+		case 'LD L,D':     return '6A';
+		case 'LD L,E':     return '6B';
+		case 'LD L,H':     return '6C';
+		case 'LD L,L':     return '6D';
+		case 'LD L,(HL)':  return '6E';
+		case 'LD L,A':     return '6F';
+		case 'LD (HL),B':  return '70';
+		case 'LD (HL),C':  return '71';
+		case 'LD (HL),D':  return '72';
+		case 'LD (HL),E':  return '73';
+		case 'LD (HL),H':  return '74';
+		case 'LD (HL),L':  return '75';
+		case 'HALT':       return '76';
+		case 'LD (HL),A':  return '77';
+		case 'LD A,B':     return '78';
+		case 'LD A,C':     return '79';
+		case 'LD A,D':     return '7A';
+		case 'LD A,E':     return '7B';
+		case 'LD A,H':     return '7C';
+		case 'LD A,L':     return '7D';
+		case 'LD A,(HL)':  return '7E';
+		case 'LD A,A':     return '7F';
+		case 'ADD A,B':    return '80';
+		case 'ADD A,C':    return '81';
+		case 'ADD A,D':    return '82';
+		case 'ADD A,E':    return '83';
+		case 'ADD A,H':    return '84';
+		case 'ADD A,L':    return '85';
+		case 'ADD A,(HL)': return '86';
+		case 'ADD A,A':    return '87';
+		case 'ADC A,B':    return '88';
+		case 'ADC A,C':    return '89';
+		case 'ADC A,D':    return '8A';
+		case 'ADC A,E':    return '8B';
+		case 'ADC A,H':    return '8C';
+		case 'ADC A,L':    return '8D';
+		case 'ADC A,(HL)': return '8E';
+		case 'ADC A,A':    return '8F';
+		case 'SUB B':      return '90';
+		case 'SUB C':      return '91';
+		case 'SUB D':      return '92';
+		case 'SUB E':      return '93';
+		case 'SUB H':      return '94';
+		case 'SUB L':      return '95';
+		case 'SUB (HL)':   return '96';
+		case 'SUB A':      return '97';
+		case 'SBC A,B':    return '98';
+		case 'SBC A,C':    return '99';
+		case 'SBC A,D':    return '9A';
+		case 'SBC A,E':    return '9B';
+		case 'SBC A,H':    return '9C';
+		case 'SBC A,L':    return '9D';
+		case 'SBC A,(HL)': return '9E';
+		case 'SBC A,A':    return '9F';
+		case 'AND B':      return 'A0';
+		case 'AND C':      return 'A1';
+		case 'AND D':      return 'A2';
+		case 'AND E':      return 'A3';
+		case 'AND H':      return 'A4';
+		case 'AND L':      return 'A5';
+		case 'AND (HL)':   return 'A6';
+		case 'AND A':      return 'A7';
+		case 'XOR B':      return 'A8';
+		case 'XOR C':      return 'A9';
+		case 'XOR D':      return 'AA';
+		case 'XOR E':      return 'AB';
+		case 'XOR H':      return 'AC';
+		case 'XOR L':      return 'AD';
+		case 'XOR (HL)':   return 'AE';
+		case 'XOR A':      return 'AF';
+		case 'OR B':       return 'B0';
+		case 'OR C':       return 'B1';
+		case 'OR D':       return 'B2';
+		case 'OR E':       return 'B3';
+		case 'OR H':       return 'B4';
+		case 'OR L':       return 'B5';
+		case 'OR (HL)':    return 'B6';
+		case 'OR A':       return 'B7';
+		case 'CP B':       return 'B8';
+		case 'CP C':       return 'B9';
+		case 'CP D':       return 'BA';
+		case 'CP E':       return 'BB';
+		case 'CP H':       return 'BC';
+		case 'CP L':       return 'BD';
+		case 'CP (HL)':    return 'BE';
+		case 'CP A':       return 'BF';
+		case 'RET NZ':     return 'C0';
+		case 'POP BC':     return 'C1';
+		case 'PUSH BC':    return 'C5';
+		case 'RST 00':     return 'C7';
+		case 'RET Z':      return 'C8';
+		case 'RET':        return 'C9';
+		case 'RST 08':     return 'CF';
+		case 'RET NC':     return 'D0';
+		case 'POP DE':     return 'D1';
+		case 'PUSH DE':    return 'D5';
+		case 'RST 10':     return 'D7';
+		case 'RET C':      return 'D8';
+		case 'EXX':        return 'D9';
+		case 'RST 18':     return 'DF';
+		case 'RET PO':     return 'E0';
+		case 'POP HL':     return 'E1';
+		case 'EX (SP),HL': return 'E3';
+		case 'PUSH HL':    return 'E5';
+		case 'RST 20':     return 'E7';
+		case 'RET PE':     return 'E8';
+		case 'JP (HL)':    return 'E9';
+		case 'EX DE,HL':   return 'EB';
+		case 'RST 28':     return 'EF';
+		case 'RET P':      return 'F0';
+		case 'POP AF':     return 'F1';
+		case 'DI':         return 'F3';
+		case 'PUSH AF':    return 'F5';
+		case 'RST 30':     return 'F7';
+		case 'RET M':      return 'F8';
+		case 'LD SP,HL':   return 'F9';
+		case 'EI':         return 'FB';
+		case 'RST 38':     return 'FF';
+		case 'RLC B':      return 'CB 00';
+		case 'RLC C':      return 'CB 01';
+		case 'RLC D':      return 'CB 02';
+		case 'RLC E':      return 'CB 03';
+		case 'RLC H':      return 'CB 04';
+		case 'RLC L':      return 'CB 05';
+		case 'RLC (HL)':   return 'CB 06';
+		case 'RLC A':      return 'CB 07';
+		case 'RRC B':      return 'CB 08';
+		case 'RRC C':      return 'CB 09';
+		case 'RRC D':      return 'CB 0A';
+		case 'RRC E':      return 'CB 0B';
+		case 'RRC H':      return 'CB 0C';
+		case 'RRC L':      return 'CB 0D';
+		case 'RRC (HL)':   return 'CB 0E';
+		case 'RRC A':      return 'CB 0F';
+		case 'RL B':       return 'CB 10';
+		case 'RL C':       return 'CB 11';
+		case 'RL D':       return 'CB 12';
+		case 'RL E':       return 'CB 13';
+		case 'RL H':       return 'CB 14';
+		case 'RL L':       return 'CB 15';
+		case 'RL (HL)':    return 'CB 16';
+		case 'RL A':       return 'CB 17';
+		case 'RR B':       return 'CB 18';
+		case 'RR C':       return 'CB 19';
+		case 'RR D':       return 'CB 1A';
+		case 'RR E':       return 'CB 1B';
+		case 'RR H':       return 'CB 1C';
+		case 'RR L':       return 'CB 1D';
+		case 'RR (HL)':    return 'CB 1E';
+		case 'RR A':       return 'CB 1F';
+		case 'SLA B':      return 'CB 20';
+		case 'SLA C':      return 'CB 21';
+		case 'SLA D':      return 'CB 22';
+		case 'SLA E':      return 'CB 23';
+		case 'SLA H':      return 'CB 24';
+		case 'SLA L':      return 'CB 25';
+		case 'SLA (HL)':   return 'CB 26';
+		case 'SLA A':      return 'CB 27';
+		case 'SRA B':      return 'CB 28';
+		case 'SRA C':      return 'CB 29';
+		case 'SRA D':      return 'CB 2A';
+		case 'SRA E':      return 'CB 2B';
+		case 'SRA H':      return 'CB 2C';
+		case 'SRA L':      return 'CB 2D';
+		case 'SRA (HL)':   return 'CB 2E';
+		case 'SRA A':      return 'CB 2F';
+		case 'SRL B':      return 'CB 38';
+		case 'SRL C':      return 'CB 39';
+		case 'SRL D':      return 'CB 3A';
+		case 'SRL E':      return 'CB 3B';
+		case 'SRL H':      return 'CB 3C';
+		case 'SRL L':      return 'CB 3D';
+		case 'SRL (HL)':   return 'CB 3E';
+		case 'SRL A':      return 'CB 3F';
+		case 'BIT 0,B':    return 'CB 40';
+		case 'BIT 0,C':    return 'CB 41';
+		case 'BIT 0,D':    return 'CB 42';
+		case 'BIT 0,E':    return 'CB 43';
+		case 'BIT 0,H':    return 'CB 44';
+		case 'BIT 0,L':    return 'CB 45';
+		case 'BIT 0,(HL)': return 'CB 46';
+		case 'BIT 0,A':    return 'CB 47';
+		case 'BIT 1,B':    return 'CB 48';
+		case 'BIT 1,C':    return 'CB 49';
+		case 'BIT 1,D':    return 'CB 4A';
+		case 'BIT 1,E':    return 'CB 4B';
+		case 'BIT 1,H':    return 'CB 4C';
+		case 'BIT 1,L':    return 'CB 4D';
+		case 'BIT 1,(HL)': return 'CB 4E';
+		case 'BIT 1,A':    return 'CB 4F';
+		case 'BIT 2,B':    return 'CB 50';
+		case 'BIT 2,C':    return 'CB 51';
+		case 'BIT 2,D':    return 'CB 52';
+		case 'BIT 2,E':    return 'CB 53';
+		case 'BIT 2,H':    return 'CB 54';
+		case 'BIT 2,L':    return 'CB 55';
+		case 'BIT 2,(HL)': return 'CB 56';
+		case 'BIT 2,A':    return 'CB 57';
+		case 'BIT 3,B':    return 'CB 58';
+		case 'BIT 3,C':    return 'CB 59';
+		case 'BIT 3,D':    return 'CB 5A';
+		case 'BIT 3,E':    return 'CB 5B';
+		case 'BIT 3,H':    return 'CB 5C';
+		case 'BIT 3,L':    return 'CB 5D';
+		case 'BIT 3,(HL)': return 'CB 5E';
+		case 'BIT 3,A':    return 'CB 5F';
+		case 'BIT 4,B':    return 'CB 60';
+		case 'BIT 4,C':    return 'CB 61';
+		case 'BIT 4,D':    return 'CB 62';
+		case 'BIT 4,E':    return 'CB 63';
+		case 'BIT 4,H':    return 'CB 64';
+		case 'BIT 4,L':    return 'CB 65';
+		case 'BIT 4,(HL)': return 'CB 66';
+		case 'BIT 4,A':    return 'CB 67';
+		case 'BIT 5,B':    return 'CB 68';
+		case 'BIT 5,C':    return 'CB 69';
+		case 'BIT 5,D':    return 'CB 6A';
+		case 'BIT 5,E':    return 'CB 6B';
+		case 'BIT 5,H':    return 'CB 6C';
+		case 'BIT 5,L':    return 'CB 6D';
+		case 'BIT 5,(HL)': return 'CB 6E';
+		case 'BIT 5,A':    return 'CB 6F';
+		case 'BIT 6,B':    return 'CB 70';
+		case 'BIT 6,C':    return 'CB 71';
+		case 'BIT 6,D':    return 'CB 72';
+		case 'BIT 6,E':    return 'CB 73';
+		case 'BIT 6,H':    return 'CB 74';
+		case 'BIT 6,L':    return 'CB 75';
+		case 'BIT 6,(HL)': return 'CB 76';
+		case 'BIT 6,A':    return 'CB 77';
+		case 'BIT 7,B':    return 'CB 78';
+		case 'BIT 7,C':    return 'CB 79';
+		case 'BIT 7,D':    return 'CB 7A';
+		case 'BIT 7,E':    return 'CB 7B';
+		case 'BIT 7,H':    return 'CB 7C';
+		case 'BIT 7,L':    return 'CB 7D';
+		case 'BIT 7,(HL)': return 'CB 7E';
+		case 'BIT 7,A':    return 'CB 7F';
+		case 'RES 0,B':    return 'CB 80';
+		case 'RES 0,C':    return 'CB 81';
+		case 'RES 0,D':    return 'CB 82';
+		case 'RES 0,E':    return 'CB 83';
+		case 'RES 0,H':    return 'CB 84';
+		case 'RES 0,L':    return 'CB 85';
+		case 'RES 0,(HL)': return 'CB 86';
+		case 'RES 0,A':    return 'CB 87';
+		case 'RES 1,B':    return 'CB 88';
+		case 'RES 1,C':    return 'CB 89';
+		case 'RES 1,D':    return 'CB 8A';
+		case 'RES 1,E':    return 'CB 8B';
+		case 'RES 1,H':    return 'CB 8C';
+		case 'RES 1,L':    return 'CB 8D';
+		case 'RES 1,(HL)': return 'CB 8E';
+		case 'RES 1,A':    return 'CB 8F';
+		case 'RES 2,B':    return 'CB 90';
+		case 'RES 2,C':    return 'CB 91';
+		case 'RES 2,D':    return 'CB 92';
+		case 'RES 2,E':    return 'CB 93';
+		case 'RES 2,H':    return 'CB 94';
+		case 'RES 2,L':    return 'CB 95';
+		case 'RES 2,(HL)': return 'CB 96';
+		case 'RES 2,A':    return 'CB 97';
+		case 'RES 3,B':    return 'CB 98';
+		case 'RES 3,C':    return 'CB 99';
+		case 'RES 3,D':    return 'CB 9A';
+		case 'RES 3,E':    return 'CB 9B';
+		case 'RES 3,H':    return 'CB 9C';
+		case 'RES 3,L':    return 'CB 9D';
+		case 'RES 3,(HL)': return 'CB 9E';
+		case 'RES 3,A':    return 'CB 9F';
+		case 'RES 4,B':    return 'CB A0';
+		case 'RES 4,C':    return 'CB A1';
+		case 'RES 4,D':    return 'CB A2';
+		case 'RES 4,E':    return 'CB A3';
+		case 'RES 4,H':    return 'CB A4';
+		case 'RES 4,L':    return 'CB A5';
+		case 'RES 4,(HL)': return 'CB A6';
+		case 'RES 4,A':    return 'CB A7';
+		case 'RES 5,B':    return 'CB A8';
+		case 'RES 5,C':    return 'CB A9';
+		case 'RES 5,D':    return 'CB AA';
+		case 'RES 5,E':    return 'CB AB';
+		case 'RES 5,H':    return 'CB AC';
+		case 'RES 5,L':    return 'CB AD';
+		case 'RES 5,(HL)': return 'CB AE';
+		case 'RES 5,A':    return 'CB AF';
+		case 'RES 6,B':    return 'CB B0';
+		case 'RES 6,C':    return 'CB B1';
+		case 'RES 6,D':    return 'CB B2';
+		case 'RES 6,E':    return 'CB B3';
+		case 'RES 6,H':    return 'CB B4';
+		case 'RES 6,L':    return 'CB B5';
+		case 'RES 6,(HL)': return 'CB B6';
+		case 'RES 6,A':    return 'CB B7';
+		case 'RES 7,B':    return 'CB B8';
+		case 'RES 7,C':    return 'CB B9';
+		case 'RES 7,D':    return 'CB BA';
+		case 'RES 7,E':    return 'CB BB';
+		case 'RES 7,H':    return 'CB BC';
+		case 'RES 7,L':    return 'CB BD';
+		case 'RES 7,(HL)': return 'CB BE';
+		case 'RES 7,A':    return 'CB BF';
+		case 'SET 0,B':    return 'CB C0';
+		case 'SET 0,C':    return 'CB C1';
+		case 'SET 0,D':    return 'CB C2';
+		case 'SET 0,E':    return 'CB C3';
+		case 'SET 0,H':    return 'CB C4';
+		case 'SET 0,L':    return 'CB C5';
+		case 'SET 0,(HL)': return 'CB C6';
+		case 'SET 0,A':    return 'CB C7';
+		case 'SET 1,B':    return 'CB C8';
+		case 'SET 1,C':    return 'CB C9';
+		case 'SET 1,D':    return 'CB CA';
+		case 'SET 1,E':    return 'CB CB';
+		case 'SET 1,H':    return 'CB CC';
+		case 'SET 1,L':    return 'CB CD';
+		case 'SET 1,(HL)': return 'CB CE';
+		case 'SET 1,A':    return 'CB CF';
+		case 'SET 2,B':    return 'CB D0';
+		case 'SET 2,C':    return 'CB D1';
+		case 'SET 2,D':    return 'CB D2';
+		case 'SET 2,E':    return 'CB D3';
+		case 'SET 2,H':    return 'CB D4';
+		case 'SET 2,L':    return 'CB D5';
+		case 'SET 2,(HL)': return 'CB D6';
+		case 'SET 2,A':    return 'CB D7';
+		case 'SET 3,B':    return 'CB D8';
+		case 'SET 3,C':    return 'CB D9';
+		case 'SET 3,D':    return 'CB DA';
+		case 'SET 3,E':    return 'CB DB';
+		case 'SET 3,H':    return 'CB DC';
+		case 'SET 3,L':    return 'CB DD';
+		case 'SET 3,(HL)': return 'CB DE';
+		case 'SET 3,A':    return 'CB DF';
+		case 'SET 4,B':    return 'CB E0';
+		case 'SET 4,C':    return 'CB E1';
+		case 'SET 4,D':    return 'CB E2';
+		case 'SET 4,E':    return 'CB E3';
+		case 'SET 4,H':    return 'CB E4';
+		case 'SET 4,L':    return 'CB E5';
+		case 'SET 4,(HL)': return 'CB E6';
+		case 'SET 4,A':    return 'CB E7';
+		case 'SET 5,B':    return 'CB E8';
+		case 'SET 5,C':    return 'CB E9';
+		case 'SET 5,D':    return 'CB EA';
+		case 'SET 5,E':    return 'CB EB';
+		case 'SET 5,H':    return 'CB EC';
+		case 'SET 5,L':    return 'CB ED';
+		case 'SET 5,(HL)': return 'CB EE';
+		case 'SET 5,A':    return 'CB EF';
+		case 'SET 6,B':    return 'CB F0';
+		case 'SET 6,C':    return 'CB F1';
+		case 'SET 6,D':    return 'CB F2';
+		case 'SET 6,E':    return 'CB F3';
+		case 'SET 6,H':    return 'CB F4';
+		case 'SET 6,L':    return 'CB F5';
+		case 'SET 6,(HL)': return 'CB F6';
+		case 'SET 6,A':    return 'CB F7';
+		case 'SET 7,B':    return 'CB F8';
+		case 'SET 7,C':    return 'CB F9';
+		case 'SET 7,D':    return 'CB FA';
+		case 'SET 7,E':    return 'CB FB';
+		case 'SET 7,H':    return 'CB FC';
+		case 'SET 7,L':    return 'CB FD';
+		case 'SET 7,(HL)': return 'CB FE';
+		case 'SET 7,A':    return 'CB FF';
+		case 'ADD IX,BC':  return 'DD 09';
+		case 'ADD IX,DE':  return 'DD 19';
+		case 'INC IX':     return 'DD 23';
+		case 'ADD IX,IX':  return 'DD 29';
+		case 'DEC IX':     return 'DD 2B';
+		case 'ADD IX,SP':  return 'DD 39';
+		case 'POP IX':     return 'DD E1';
+		case 'EX (SP),IX': return 'DD E3';
+		case 'PUSH IX':    return 'DD E5';
+		case 'JP (IX)':    return 'DD E9';
+		case 'LD SP,IX':   return 'DD F9';
+		case 'IN B,(C)':   return 'ED 40';
+		case 'OUT (C),B':  return 'ED 41';
+		case 'SBC HL,BC':  return 'ED 42';
+		case 'NEG':        return 'ED 44';
+		case 'RETN':       return 'ED 45';
+		case 'IM 0':       return 'ED 46';
+		case 'LD I,A':     return 'ED 47';
+		case 'IN C,(C)':   return 'ED 48';
+		case 'OUT (C),C':  return 'ED 49';
+		case 'ADC HL,BC':  return 'ED 4A';
+		case 'RETI':       return 'ED 4D';
+		case 'LD R,A':     return 'ED 4F';
+		case 'IN D,(C)':   return 'ED 50';
+		case 'OUT (C),D':  return 'ED 51';
+		case 'SBC HL,DE':  return 'ED 52';
+		case 'IM 1':       return 'ED 56';
+		case 'LD A,I':     return 'ED 57';
+		case 'IN E,(C)':   return 'ED 58';
+		case 'OUT (C),E':  return 'ED 59';
+		case 'ADC HL,DE':  return 'ED 5A';
+		case 'IM 2':       return 'ED 5E';
+		case 'LD A,R':     return 'ED 5F';
+		case 'IN H,(C)':   return 'ED 60';
+		case 'OUT (C),H':  return 'ED 61';
+		case 'SBC HL,HL':  return 'ED 62';
+		case 'RRD':        return 'ED 67';
+		case 'IN L,(C)':   return 'ED 68';
+		case 'OUT (C),L':  return 'ED 69';
+		case 'ADC HL,HL':  return 'ED 6A';
+		case 'RLD':        return 'ED 6F';
+		case 'SBC HL,SP':  return 'ED 72';
+		case 'IN A,(C)':   return 'ED 78';
+		case 'OUT (C),A':  return 'ED 79';
+		case 'ADC HL,SP':  return 'ED 7A';
+		case 'LDI':        return 'ED A0';
+		case 'CPI':        return 'ED A1';
+		case 'INI':        return 'ED A2';
+		case 'OUTI':       return 'ED A3';
+		case 'LDD':        return 'ED A8';
+		case 'CPD':        return 'ED A9';
+		case 'IND':        return 'ED AA';
+		case 'OUTD':       return 'ED AB';
+		case 'LDIR':       return 'ED B0';
+		case 'CPIR':       return 'ED B1';
+		case 'INIR':       return 'ED B2';
+		case 'OTIR':       return 'ED B3';
+		case 'LDDR':       return 'ED B8';
+		case 'CPDR':       return 'ED B9';
+		case 'INDR':       return 'ED BA';
+		case 'OTDR':       return 'ED BB';
+		case 'ADD IY,BC':  return 'FD 09';
+		case 'ADD IY,DE':  return 'FD 19';
+		case 'INC IY':     return 'FD 23';
+		case 'ADD IY,IY':  return 'FD 29';
+		case 'DEC IY':     return 'FD 2B';
+		case 'ADD IY,SP':  return 'FD 39';
+		case 'POP IY':     return 'FD E1';
+		case 'EX (SP),IY': return 'FD E3';
+		case 'PUSH IY':    return 'FD E5';
+		case 'JP (IY)':    return 'FD E9';
+		case 'LD SP,IY':   return 'FD F9';
+	}
+	var re;
+	// Check label
+	var label;
+	var rel;
+	re=code.match(/([0-9A-Z_]+):/);
+	if (re) {
+		// Absolute label
+		if (labels[re[0]]) label=labels[re[0]];
+		else label='0000';
+		// Relative label
+		if (labels[re[0]]) {
+			rel=parseInt(labels[re[0]],16)-parseInt(address,16)-2;
+			if (rel<0) rel=rel+256;
+			if (rel<16) rel='0'+rel.toString(16);
+			else rel=rel.toString(16);
+			rel=rel.toUpperCase();
+		} else rel='00';
+	}
+	// ORG statement
+	re=code.match(/ORG ([0-9A-F][0-9A-F][0-9A-F][0-9A-F])/);
+	if (re) return '('+re[1]+')';
+	// Relatave jump with label (code for first assemble)
+	re=code.match(/DJNZ ([0-9A-Z_]+):/);
+	if (re) return '10 '+rel;
+	re=code.match(/JR ([0-9A-Z_]+):/);
+	if (re) return '18 '+rel;
+	re=code.match(/JR NZ,([0-9A-Z_]+):/);
+	if (re) return '20 '+rel;
+	re=code.match(/JR Z,([0-9A-Z_]+):/);
+	if (re) return '28 '+rel;
+	re=code.match(/JR NC,([0-9A-Z_]+):/);
+	if (re) return '30 '+rel;
+	re=code.match(/JR C,([0-9A-Z_]+):/);
+	if (re) return '38 '+rel;
+	// Relative jumps
+	re=code.match(/DJNZ ([0-9A-F][0-9A-F])([^:]|$)/);
+	if (re) return '10 '+re[1];
+	re=code.match(/JR ([0-9A-F][0-9A-F])([^:]|$)/);
+	if (re) return '18 '+re[1];
+	re=code.match(/JR NZ,([0-9A-F][0-9A-F])([^:]|$)/);
+	if (re) return '20 '+re[1];
+	re=code.match(/JR Z,([0-9A-F][0-9A-F])([^:]|$)/);
+	if (re) return '28 '+re[1];
+	re=code.match(/JR NC,([0-9A-F][0-9A-F])([^:]|$)/);
+	if (re) return '30 '+re[1];
+	re=code.match(/JR C,([0-9A-F][0-9A-F])([^:]|$)/);
+	if (re) return '38 '+re[1];
+	// The other labels must be absolute 16 bit ones.
+	re=code.match(/^([0-9A-Z_]+):$/);
+	if (re) return '(-)';
+	re=code.match(/([0-9A-Z_]+):/);
+	if (re) code=code.replace(/([0-9A-Z_]+):/,label);
+	// The other codes.
+	re=code.match(/LD BC,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return '01 '+re[2]+' '+re[1];
+	re=code.match(/LD B,([0-9A-F][0-9A-F])/);
+	if (re) return '06 '+re[1];
+	re=code.match(/LD C,([0-9A-F][0-9A-F])/);
+	if (re) return '0E '+re[1];
+	re=code.match(/LD DE,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return '11 '+re[2]+' '+re[1];
+	re=code.match(/LD D,([0-9A-F][0-9A-F])/);
+	if (re) return '16 '+re[1];
+	re=code.match(/LD E,([0-9A-F][0-9A-F])/);
+	if (re) return '1E '+re[1];
+	re=code.match(/LD HL,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return '21 '+re[2]+' '+re[1];
+	re=code.match(/LD \(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\),HL/);
+	if (re) return '22 '+re[2]+' '+re[1];
+	re=code.match(/LD H,([0-9A-F][0-9A-F])/);
+	if (re) return '26 '+re[1];
+	re=code.match(/LD HL,\(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\)/);
+	if (re) return '2A '+re[2]+' '+re[1];
+	re=code.match(/LD L,([0-9A-F][0-9A-F])/);
+	if (re) return '2E '+re[1];
+	re=code.match(/LD SP,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return '31 '+re[2]+' '+re[1];
+	re=code.match(/LD \(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\),A/);
+	if (re) return '32 '+re[2]+' '+re[1];
+	re=code.match(/LD (HL),([0-9A-F][0-9A-F])/);
+	if (re) return '36 '+re[1];
+	re=code.match(/LD A,\(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\)/);
+	if (re) return '3A '+re[2]+' '+re[1];
+	re=code.match(/LD A,([0-9A-F][0-9A-F])/);
+	if (re) return '3E '+re[1];
+	re=code.match(/DW ([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return re[2]+' '+re[1];
+	re=code.match(/JP NZ,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'C2 '+re[2]+' '+re[1];
+	re=code.match(/JP ([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'C3 '+re[2]+' '+re[1];
+	re=code.match(/CALL NZ,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'C4 '+re[2]+' '+re[1];
+	re=code.match(/ADD A,([0-9A-F][0-9A-F])/);
+	if (re) return 'C6 '+re[1];
+	re=code.match(/JP Z,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'CA '+re[2]+' '+re[1];
+	re=code.match(/CALL Z,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'CC '+re[2]+' '+re[1];
+	re=code.match(/CALL ([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'CD '+re[2]+' '+re[1];
+	re=code.match(/ADC A,([0-9A-F][0-9A-F])/);
+	if (re) return 'CE '+re[1];
+	re=code.match(/JP NC,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'D2 '+re[2]+' '+re[1];
+	re=code.match(/OUT ([0-9A-F][0-9A-F]),A/);
+	if (re) return 'D3 '+re[1];
+	re=code.match(/CALL NC,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'D4 '+re[2]+' '+re[1];
+	re=code.match(/SUB ([0-9A-F][0-9A-F])/);
+	if (re) return 'D6 '+re[1];
+	re=code.match(/JP C,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'DA '+re[2]+' '+re[1];
+	re=code.match(/IN A,([0-9A-F][0-9A-F])/);
+	if (re) return 'DB '+re[1];
+	re=code.match(/CALL C,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'DC '+re[2]+' '+re[1];
+	re=code.match(/SBC A,([0-9A-F][0-9A-F])/);
+	if (re) return 'DE '+re[1];
+	re=code.match(/JP PO,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'E2 '+re[2]+' '+re[1];
+	re=code.match(/CALL PO,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'E4 '+re[2]+' '+re[1];
+	re=code.match(/AND ([0-9A-F][0-9A-F])/);
+	if (re) return 'E6 '+re[1];
+	re=code.match(/JP PE,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'EA '+re[2]+' '+re[1];
+	re=code.match(/CALL PE,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'EC '+re[2]+' '+re[1];
+	re=code.match(/XOR ([0-9A-F][0-9A-F])/);
+	if (re) return 'EE '+re[1];
+	re=code.match(/JP P,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'F2 '+re[2]+' '+re[1];
+	re=code.match(/CALL P,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'F4 '+re[2]+' '+re[1];
+	re=code.match(/OR ([0-9A-F][0-9A-F])/);
+	if (re) return 'F6 '+re[1];
+	re=code.match(/JP M,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'FA '+re[2]+' '+re[1];
+	re=code.match(/CALL M,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'FC '+re[2]+' '+re[1];
+	re=code.match(/CP ([0-9A-F][0-9A-F])/);
+	if (re) return 'FE '+re[1];
+	re=code.match(/LD IX,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'DD 21 '+re[2]+' '+re[1];
+	re=code.match(/LD \(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\),IX/);
+	if (re) return 'DD 22 '+re[2]+' '+re[1];
+	re=code.match(/LD IX,\(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 2A '+re[2]+' '+re[1];
+	re=code.match(/LD (IX\+d),([0-9A-F][0-9A-F])/);
+	if (re) return 'DD 36 '+re[1];
+	re=code.match(/LD \(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\),BC/);
+	if (re) return 'ED 43 '+re[2]+' '+re[1];
+	re=code.match(/LD BC,\(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\)/);
+	if (re) return 'ED 4B '+re[2]+' '+re[1];
+	re=code.match(/LD \(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\),DE/);
+	if (re) return 'ED 53 '+re[2]+' '+re[1];
+	re=code.match(/LD DE,\(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\)/);
+	if (re) return 'ED 5B '+re[2]+' '+re[1];
+	re=code.match(/LD \(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\),SP/);
+	if (re) return 'ED 73 '+re[2]+' '+re[1];
+	re=code.match(/LD SP,\(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\)/);
+	if (re) return 'ED 7B '+re[2]+' '+re[1];
+	re=code.match(/LD IY,([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/);
+	if (re) return 'FD 21 '+re[2]+' '+re[1];
+	re=code.match(/LD \(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\),IY/);
+	if (re) return 'FD 22 '+re[2]+' '+re[1];
+	re=code.match(/LD IY,\(([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 2A '+re[2]+' '+re[1];
+	re=code.match(/LD (IY\+d),([0-9A-F][0-9A-F])/);
+	if (re) return 'FD 36 '+re[1];
+	re=code.match(/INC \(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 34 '+re[1];
+	re=code.match(/DEC \(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 35 '+re[1];
+	re=code.match(/LD \(IX\+([0-9A-F][0-9A-F])\),n/);
+	if (re) return 'DD 36 '+re[1];
+	re=code.match(/LD B,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 46 '+re[1];
+	re=code.match(/LD C,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 4E '+re[1];
+	re=code.match(/LD D,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 56 '+re[1];
+	re=code.match(/LD E,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 5E '+re[1];
+	re=code.match(/LD H,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 66 '+re[1];
+	re=code.match(/LD L,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 6E '+re[1];
+	re=code.match(/LD \(IX\+([0-9A-F][0-9A-F])\),B/);
+	if (re) return 'DD 70 '+re[1];
+	re=code.match(/LD \(IX\+([0-9A-F][0-9A-F])\),C/);
+	if (re) return 'DD 71 '+re[1];
+	re=code.match(/LD \(IX\+([0-9A-F][0-9A-F])\),D/);
+	if (re) return 'DD 72 '+re[1];
+	re=code.match(/LD \(IX\+([0-9A-F][0-9A-F])\),E/);
+	if (re) return 'DD 73 '+re[1];
+	re=code.match(/LD \(IX\+([0-9A-F][0-9A-F])\),H/);
+	if (re) return 'DD 74 '+re[1];
+	re=code.match(/LD \(IX\+([0-9A-F][0-9A-F])\),L/);
+	if (re) return 'DD 75 '+re[1];
+	re=code.match(/LD \(IX\+([0-9A-F][0-9A-F])\),A/);
+	if (re) return 'DD 77 '+re[1];
+	re=code.match(/LD A,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 7E '+re[1];
+	re=code.match(/ADD A,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 86 '+re[1];
+	re=code.match(/ADC A,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 8E '+re[1];
+	re=code.match(/SUB A,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 96 '+re[1];
+	re=code.match(/SBC A,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD 9E '+re[1];
+	re=code.match(/AND \(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD A6 '+re[1];
+	re=code.match(/XOR \(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD AE '+re[1];
+	re=code.match(/OR \(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD B6 '+re[1];
+	re=code.match(/CP \(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD BE '+re[1];
+	re=code.match(/INC \(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 34 '+re[1];
+	re=code.match(/DEC \(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 35 '+re[1];
+	re=code.match(/LD \(IY\+([0-9A-F][0-9A-F])\),n/);
+	if (re) return 'FD 36 '+re[1];
+	re=code.match(/LD B,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 46 '+re[1];
+	re=code.match(/LD C,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 4E '+re[1];
+	re=code.match(/LD D,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 56 '+re[1];
+	re=code.match(/LD E,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 5E '+re[1];
+	re=code.match(/LD H,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 66 '+re[1];
+	re=code.match(/LD L,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 6E '+re[1];
+	re=code.match(/LD \(IY\+([0-9A-F][0-9A-F])\),B/);
+	if (re) return 'FD 70 '+re[1];
+	re=code.match(/LD \(IY\+([0-9A-F][0-9A-F])\),C/);
+	if (re) return 'FD 71 '+re[1];
+	re=code.match(/LD \(IY\+([0-9A-F][0-9A-F])\),D/);
+	if (re) return 'FD 72 '+re[1];
+	re=code.match(/LD \(IY\+([0-9A-F][0-9A-F])\),E/);
+	if (re) return 'FD 73 '+re[1];
+	re=code.match(/LD \(IY\+([0-9A-F][0-9A-F])\),H/);
+	if (re) return 'FD 74 '+re[1];
+	re=code.match(/LD \(IY\+([0-9A-F][0-9A-F])\),L/);
+	if (re) return 'FD 75 '+re[1];
+	re=code.match(/LD \(IY\+([0-9A-F][0-9A-F])\),A/);
+	if (re) return 'FD 77 '+re[1];
+	re=code.match(/LD A,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 7E '+re[1];
+	re=code.match(/ADD A,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 86 '+re[1];
+	re=code.match(/ADC A,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 8E '+re[1];
+	re=code.match(/SUB A,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 96 '+re[1];
+	re=code.match(/SBC A,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD 9E '+re[1];
+	re=code.match(/AND \(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD A6 '+re[1];
+	re=code.match(/XOR \(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD AE '+re[1];
+	re=code.match(/OR \(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD B6 '+re[1];
+	re=code.match(/CP \(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD BE '+re[1];
+	re=code.match(/RLC \(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 06';
+	re=code.match(/RRC \(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 0E';
+	re=code.match(/RL \(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 16';
+	re=code.match(/RR \(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 1E';
+	re=code.match(/SLA \(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 26';
+	re=code.match(/SRA \(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 2E';
+	re=code.match(/SRL \(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 3E';
+	re=code.match(/BIT 0,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 46';
+	re=code.match(/BIT 1,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 4E';
+	re=code.match(/BIT 2,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 56';
+	re=code.match(/BIT 3,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 5E';
+	re=code.match(/BIT 4,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 66';
+	re=code.match(/BIT 5,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 6E';
+	re=code.match(/BIT 6,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 76';
+	re=code.match(/BIT 7,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 7E';
+	re=code.match(/RES 0,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 86';
+	re=code.match(/RES 1,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 8E';
+	re=code.match(/RES 2,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 96';
+	re=code.match(/RES 3,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' 9E';
+	re=code.match(/RES 4,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' A6';
+	re=code.match(/RES 5,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' AE';
+	re=code.match(/RES 6,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' B6';
+	re=code.match(/RES 7,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' BE';
+	re=code.match(/SET 0,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' C6';
+	re=code.match(/SET 1,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' CE';
+	re=code.match(/SET 2,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' D6';
+	re=code.match(/SET 3,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' DE';
+	re=code.match(/SET 4,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' E6';
+	re=code.match(/SET 5,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' EE';
+	re=code.match(/SET 6,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' F6';
+	re=code.match(/SET 7,\(IX\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'DD CB '+re[1]+' FE';
+	re=code.match(/RLC \(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 06';
+	re=code.match(/RRC \(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 0E';
+	re=code.match(/RL \(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 16';
+	re=code.match(/RR \(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 1E';
+	re=code.match(/SLA \(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 26';
+	re=code.match(/SRA \(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 2E';
+	re=code.match(/SRL \(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 3E';
+	re=code.match(/BIT 0,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 46';
+	re=code.match(/BIT 1,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 4E';
+	re=code.match(/BIT 2,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 56';
+	re=code.match(/BIT 3,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 5E';
+	re=code.match(/BIT 4,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 66';
+	re=code.match(/BIT 5,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 6E';
+	re=code.match(/BIT 6,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 76';
+	re=code.match(/BIT 7,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 7E';
+	re=code.match(/RES 0,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 86';
+	re=code.match(/RES 1,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 8E';
+	re=code.match(/RES 2,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 96';
+	re=code.match(/RES 3,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' 9E';
+	re=code.match(/RES 4,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' A6';
+	re=code.match(/RES 5,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' AE';
+	re=code.match(/RES 6,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' B6';
+	re=code.match(/RES 7,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' BE';
+	re=code.match(/SET 0,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' C6';
+	re=code.match(/SET 1,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' CE';
+	re=code.match(/SET 2,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' D6';
+	re=code.match(/SET 3,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' DE';
+	re=code.match(/SET 4,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' E6';
+	re=code.match(/SET 5,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' EE';
+	re=code.match(/SET 6,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' F6';
+	re=code.match(/SET 7,\(IY\+([0-9A-F][0-9A-F])\)/);
+	if (re) return 'FD CB '+re[1]+' FE';
+	return code;
+}
+function getWord(obj){
+	var t;
+	obj.focus();
+	if (document.selection) t=document.selection.createRange().text;
+	else t=obj.value.substring(obj.selectionStart,obj.selectionEnd);
+	return t.replace(/(^\s+|\s+$)/g,'');
+}
+function showInfo(obj){
+	var word=getWord(obj);
+	if (!word) return;
+	var info=document.getElementById('infowindow');
+	var syntax=asmSyntax(word);
+	if (syntax) info.innerHTML=word+'<br />'+syntax;
+}
+function asmSyntax(code){
+	switch(code.toUpperCase()){
+		case 'ADC': return 'ADD WITH CARRY';
+		case 'ADD': return 'ADD';
+		case 'AND': return 'LOGICAL AND';
+		case 'BIT': return 'BIT TEST';
+		case 'CALL': return 'CALL SUB ROUTINE';
+		case 'CCF': return 'COMPLEMENT CARRY FLAG';
+		case 'CP': return 'COMPARE';
+		case 'CPD': return 'COMPARE AND DECREMENT';
+		case 'CPDR': return 'COMPARE DECREMENT AND REPEAT';
+		case 'CPI': return 'COMPARE AND INCREMENT';
+		case 'CPIR': return 'COMPARE INCREMENT AND REPEAT';
+		case 'CPL': return 'COMPLEMENT ACCUMULATOR';
+		case 'DAA': return 'DECIMAL ADJUST ACCUMULATOR';
+		case 'DEC': return 'DECREMENT';
+		case 'DI': return 'DISABLE INTERRUPTS';
+		case 'DJNZ': return 'DEC JUMP NON-ZERO';
+		case 'EI': return 'ENABLE INTERRUPTS';
+		case 'EX': return 'EXCHANGE REGISTER PAIR';
+		case 'EXX': return 'EXCHANGE ALTERNATE REGISTERS';
+		case 'HALT': return 'HALT, WAIT FOR INTERRUPT OR RESET';
+		case 'IM': return 'INTERRUPT MODE 0 1 2';
+		case 'IN': return 'INPUT FROM PORT';
+		case 'INC': return 'INCREMENT';
+		case 'IND': return 'INPUT, DEC HL, DEC B';
+		case 'INDR': return 'INPUT, DEC HL, DEC B, REPEAT IF B>0';
+		case 'INI': return 'INPUT, INC HL, DEC B';
+		case 'INIR': return 'INPUT, INC HL, DEC B, REPEAT IF B>0';
+		case 'JP': return 'JUMP';
+		case 'JR': return 'JUMP RELATIVE';
+		case 'LD': return 'LOAD DATA TO/FROM REGISTERS/MEMORY';
+		case 'LDD': return 'LOAD DECREMENT';
+		case 'LDDR': return 'LOAD DECREMENT AND REPEAT';
+		case 'LDI': return 'LOAD AND INCREMENT';
+		case 'LDIR': return 'LOAD INCREMENT AND REPEAT';
+		case 'NEG': return 'NEGATE ACCUMULATOR 2\'S COMPLEMENT';
+		case 'NOP': return 'NO OPERATION';
+		case 'OR': return 'LOGICAL OR';
+		case 'OTDR': return 'OUTPUT, DEC HL, DEC B, REPEAT IF B>0';
+		case 'OTIR': return 'OUTPUT, INC HL, DEC B, REPEAT IF B>0';
+		case 'OUT': return 'OUTPUT TO PORT';
+		case 'OUTD': return 'OUTPUT, DEC HL, DEC B';
+		case 'OUTI': return 'OUTPUT, INC HL, DEC B';
+		case 'POP': return 'POP FROM STACK';
+		case 'PUSH': return 'PUSH INTO STACK';
+		case 'RES': return 'RESET BIT';
+		case 'RET': return 'RETURN FROM SUB ROUTINE';
+		case 'RETI': return 'RETURN FROM INTERRUPT';
+		case 'RETN': return 'RETURN FROM NON MASKABEL INTERRUPT';
+		case 'RL': return 'ROTATE LEFT register';
+		case 'RLA': return 'ROTATE LEFT ACUMULATOR';
+		case 'RLC': return 'ROTATE LEFT THROUGH CARRY register';
+		case 'RLCA': return 'ROTATE LEFT THROUGH CARRY ACCUMULATUR';
+		case 'RLD': return 'ROTATE LEFT DIGIT';
+		case 'RR': return 'ROTATE RIGHT register';
+		case 'RRA': return 'ROTATE RIGHT ACCUMULATOR';
+		case 'RRC': return 'ROTATE RIGHT CIRCULAR register';
+		case 'RRCA': return 'ROTATE RIGHT CIRCULAR ACCUMULATOR';
+		case 'RRD': return 'ROTATE RIGHT DIGIT';
+		case 'RST': return 'RESTART';
+		case 'SBC': return 'SUBTRACT WITH CARRY';
+		case 'SCF': return 'SET CARRY FLAG';
+		case 'SET': return 'SET BIT';
+		case 'SLA': return 'SHIFT LEFT ARITHMETIC register';
+		case 'SRA': return 'SHIFT RIGHT ARITHMETIC register';
+		case 'SRL': return 'SHIFT RIGHT LOGICAL register';
+		case 'SUB': return 'SUBTRACTION';
+		case 'XOR': return 'EXCLUSIVE OR';
+		default: return '';
+	}
+}
+</script>
+<body>
+<table><tr>
+<td><textarea id="lefttext" onclick="showInfo(this);" onkeyup="leftoc(event);" style="width:450px;height:500px;"></textarea></td>
+<td><textarea id="centertext" style="width:150px;height:500px;overflow:hidden;"></textarea></td>
+<td>
+	<textarea id="righttext" style="display:none;width:300px;height:500px;overflow:hidden;"></textarea>
+	<a href="#" onclick="
+			this.style.display='none';
+			document.getElementById('righttext').style.display='block';
+		">Show binary digits</a>
+</td>
+<td>
+<b>JavaScript tiny assembler for PACHIPACHI computer</b><br /><br />
+How to use:<br />
+<ul>
+<li>Write the assembler code in the left textarea. Hexadecimal and binary digit codes will be made in the center and right textarea.</li>
+<li>Always use hexadecimal, 2 digits for 1 byte value, and 4 digits for 2 byte value. Either "Ox" or "h" is NOT needed.</li>
+<li>ORG statement can be used to specify absolute address.</li>
+<li>Label can contain alphabet, number and underscore.  It must be end with ":". Case-non specific.</li>
+<li>Comment can be inserted by using either "#", ";", "//", or "/* */".</li>
+</ul>
+<br />
+<span id="infowindow" style="width:300px;"></span><br />
+<a href="data:application/octet-stream,test+OK" onclick="save(this); return true;">Save C file</a><br />
+<a href="data:application/octet-stream,test+OK" onclick="save(this,'zk80'); return true;">Save ZK-80 file</a><br />
+<a href="#" onclick="checkZ80(document.getElementById('centertext')); return false;">Check out Z80 specific codes.</a><br />
+</td>
+</table>
+</body>
+<script type="text/javascript">
+setTimeout(
+	function(){
+		setTimeout(arguments.callee,100);
+		syncScroll();
+	},100);
+save=function(obj,type){
+	var t=""+document.getElementById("centertext").value;
+	var i,j,data,line;
+	var min=0xffff;
+	var max=0x0000;
+	var addr=0x0000;
+	var result=new Array();
+	// Search line by line
+	var re=t.match(/(.*)(\r?\n?)/g);
+	for (i=0;i<re.length;i++) {
+		line=re[i].replace(/(^[\s]+|[\s]+$|[\r\n]+)/g,"");
+		if (line.match(/^\([0-9A-F]{4}\)$/)) {
+			addr=parseInt(line.substr(1,line.length-2),16);
+			continue;
+		}
+		line=re[i].match(/[0-9A-F][0-9A-F]/g);
+		if (line) {
+			for (j=0;j<line.length;j++) {
+				if (addr<min) min=addr;
+				if (max<addr) max=addr;
+				result[addr++]=parseInt(line[j],16);
+			}
+		}
+	}
+	var dechex8=function(data){
+		if (data<16) return "0"+data.toString(16);
+		else return data.toString(16);
+	};
+	if (type=="zk80") {
+		// Construct ZK-80 file
+		t="%"+dechex8(min&0xff)+"%"+dechex8(min>>8);
+		for (addr=min;addr<=max;addr++) {
+			t+="%"+dechex8(result[addr]);
+		}
+		result="data:application/octet-stream,"+t;
+	} else {
+		// Construct C file
+		t="// 0x"+min.toString(16)+"-0x"+max.toString(16)+"\r\n";
+		t+="static const unsigned char rom[]={\r\n";
+		for (addr=min;addr<=max;addr++) {
+			if (typeof result[addr]=="undefined") {
+				t+="0x00";
+			} else {
+				t+="0x"+dechex8(result[addr]);
+			}
+			if (addr<max) t+=",";
+			if ((addr&0x0f)==0x0f) t+="\r\n";
+		}
+		if ((addr&0x0f)!=0x00) t+="\r\n";
+		t+="};\r\n";
+		// Construct URL
+		result="data:application/octet-stream,";
+		for (i=0;i<t.length;i++) {
+			data=t.charCodeAt(i);
+			result+="%"+dechex8(data);
+		}
+	}
+	obj.href=result;
+	return true;
+};
+checkZ80=function(obj){
+	var org=""+obj.value;
+	var result="";
+	var re=org.match(/(.*)(\r\n|]r|\n)/g);
+	var exist=false;
+	for (var i=0;i<re.length;i++) {
+		var line=re[i].replace(/[\s]*$/,"");
+		var re2=line.match(/^[0-9A-F][0-9A-F]/);
+		if (re2) {
+			switch (parseInt(re2[0],16)) {
+				case 0x08: case 0x10: case 0x18: case 0x20: case 0x28: case 0x30: case 0x38: 
+				case 0xcb: case 0xd9: case 0xdd: case 0xed: case 0xfd:
+					line+=" //Z80";
+					exist=true;
+				default:
+					break;
+			}
+		}
+		result+=line+"\n";
+	}
+	obj.value=result;
+	if (exist) alert("Z80 specific code(s) found!");
+	else alert("Z80 specific code not found.");
+};
+</script>
+</html>

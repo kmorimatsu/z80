@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ja">
+<!--
+/********************************
+* KM-Z80 web written by Katsumi *
+*    This script is released    *
+*      under the LGPL v2.1.     *
+********************************/
+
+Note that rom.js and fonts.png ARE NOT provided by LGPL license.
+
+-->
+<head>
+	<meta charset="UTF-8" />
+	<link rel="stylesheet" type="text/css" href="./style.css" />
+	<!-- HTML5 functions -->
+	<script type="text/javascript" src="./get.js"></script>
+	<script type="text/javascript" src="./dom.js"></script>
+	<script type="text/javascript" src="./file.js"></script>
+	<script type="text/javascript" src="./keyboard.js"></script>
+	<script type="text/javascript" src="./display.js"></script>
+	<script type="text/javascript" src="./audio.js"></script>
+	<!-- Load Z80 CPU emulator -->
+	<script type="text/javascript" src="./z80.js"></script>
+	<script type="text/javascript" src="./z80functions.js"></script>
+	<!-- Load MZ-80K environment -->
+	<script type="text/javascript" src="./memory.js"></script>
+	<script type="text/javascript" src="./io.js"></script>
+	<script type="text/javascript" src="./i8255.js"></script>
+	<script type="text/javascript" src="./i8253.js"></script>
+	<!-- Load MONITOR program -->
+	<script type="text/javascript" src="./rom.js"></script>
+	<!-- Load from casette tape (optional) -->
+	<script type="text/javascript" src="./mztape.js"></script>
+	<!-- Load debug functions (optional; it will work at kmz80web.html?debug=1) -->
+	<script type="text/javascript" src="./debug.js"></script>
+	<title>KM-Z80 web v1.0</title>
+</head>
+<body>
+	<!-- Canvas used to black out the display -->
+	<canvas id="blank" width="320" height="200"></canvas>
+	<!-- Main canvas used for display with 40x25 character resolution -->
+	<canvas id="display" width="320" height="200"></canvas>
+	<!-- Debug output -->
+	<div class="debug" id="debug"></div>
+	<!-- keyboard -->
+	<div style="width:320;">
+		<canvas id="keyboard" width="320" height="100"></canvas>
+	</div>
+	<!-- Kana and CPU speed indicator -->
+	<div class="info">
+		<canvas id="led" width="16" height="16"></canvas>
+		<span id="speed">clock: 2000000 hz</span>
+	</div>
+	<!-- Debug buttons -->
+	<div class="debug" style="width: 320px;">
+		<input value="Step" type="button" onclick="dom.clickStep();" />
+		<input value="Cont." type="button" onclick="dom.clickCont();" />
+		<input value="Stop at" type="button" onclick="dom.clickStopAt();" />
+		<input value="Log to" type="button" onclick="dom.clickLogTo();" />
+		<input value="Dump" type="button" onclick="dom.clickDump();" />
+	</div>
+	<!-- Debug outputs -->
+	<pre class="debug" id="displaylog"></pre>
+	<pre class="debug" id="dump"></pre>
+	<!-- File upload input -->
+	<input class="file" id="load" type="file" onchange="file.loaded(this);" />
+	<!-- File upload button -->
+	<input type="button" value="Set MZT" onclick="file.setMZT(document.getElementById('load'));" />
+	<!-- Help link -->
+	<a class="help" href="./help/index.html" onclick="window.open(this.href); return false;">Help</a>
+	<!-- File upload indicator -->
+	<span class="file" id="mztfile"></span>
+	<!-- File download link -->
+	<a class="file" id="save" href="data:application/octet-stream,test+OK">Save MZT</a>
+	<!-- Load main script -->
+	<script type="text/javascript" src="main.js"></script>
+	<!-- Try to use two threads (experimental; it will work at kmz80web.html?worker=1) -->
+	<script type="text/javascript" src="webworkers.js"></script>
+	<script type="text/javascript">
+		// Iniliarizing display will start everything.
+		display.init();
+	</script>
+</body>
+</html>

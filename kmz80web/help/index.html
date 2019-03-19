@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="UTF-8" />
+	<title>KM-Z80 web の使い方</title>
+	<style type="text/css">
+	<!--
+		body {
+			width: 640px;
+		}
+		div {
+			text-align: center;
+		}
+		a {
+			text-decoration: none;
+		}
+	-->
+	</style>
+</head>
+<body>
+<p>KM-Z80 webは、HTML5による、SHARP MZ-80Kのエミュレーターです。</p>
+<p>HTML5の機能のうち使用しているものは、以下の通りです。</p>
+<ul>
+<li>Canvas</li>
+<li>FileReader</li>
+<li>Web Audio API もしくは Audio Data API</li>
+</ul>
+<p>これら３つの機能がすべてそろっている環境（FireFoxやChromeなど）での使用が理想的です。
+が、Audio APIが使えなくても音が鳴らないだけですし、FileReaderが使えなくても、あらかじめロードされている整数型BASICを走らせることは可能です。</p>
+<p><a href="../kmz80web.html">kmz80web.html</a>にブラウザでアクセスすると、以下のように表示されます。</p>
+<div><img src="kmz80web.png" alt="kmz80web" /></div>
+<p>黒い画面が、40文字×２５行の、ディスプレイです。
+その下は、キーボードです。ここをクリックすることで文字入力が可能ですが、PCのキーボードからも入力できます。
+その左下、緑色のポッチは、キー入力選択（英数かカナか）で、緑の時は英数、赤の時はカナ入力です（PCのキーボードではTabキーで切り替えできます）。
+その右側はZ80 CPUの動作速度を示します。
+PCではほとんどの場合MZ-80Kと同じ2 MHzで動作しますが、モバイル環境では少し遅くなるかもしれません。
+その下、「Set MZT」のボタンは、カセットテープからのプログラムのロードに相当します（後ほど説明します）。
+「Help」は、現在閲覧中のヘルプファイルを表示させるときに使います。</p>
+<p>この状態で、整数型BASIC(
+<a href="http://www.vector.co.jp/soft/other/other/se499422.html">KM-BASIC</a>
+)がすでにロードされています。「GOTO$1200」と入力し、ENTERを押すと、以下のようにBASICが使える状態になります。</p>
+<div><img src="km-basic.png" alt="kmz80web07" /></div>
+<p>また、ブラウザでアクセスするURLを「<a href="../kmz80web.html?start=1200">kmz80web.html?start=1200</a>」とすると、上記の入力を省略して、すぐにBASICが使えるようになります。</p>
+<div><img src="start1200.png" alt="kmz80web07" /></div>
+<p>カセットテープのプログラムをロードするには、それをバイナリファイルに変換したもの(MZTファイル、MZFファイルなど)を介して行います。
+「Set MZT」ボタンを押すと、ファイルのアップロードモードになるので、MZT/MZFファイルを選択してください。
+この際、Web上に存在するMZT/MZFファイルをURLで直接選択することもできます（ブラウザの種類によります）。</p>
+<p>MZT/MZFファイルのセットに成功すると、下にファイル名とファイルサイズが表示されます。</p>
+<div><img src="upload.png" alt="kmz80web07" /></div>
+<p>「LOAD」と入力しENTERを押すと、プログラムがロードされ、実行されます。</p>
+<div><img src="load.png" alt="kmz80web07" /></div>
+<div><img src="game.png" alt="kmz80web07" /></div>
+<p>エミュレーターの中で、カセットテープにセーブする命令を実行すると、下に「Save MZT」というリンクが表示されます。</p>
+<div><img src="save.png" alt="kmz80web07" /></div>
+<p>このリンクをクリックすると、MZTファイルを保存することができます。右クリックでファイル名を付けて保存することもできます。</p>
+<p>なお、KM-Z80 webはデバッグ機能を搭載しており、ブレークポイントの設定やステップ実行を行うことができます。
+デバッグ機能を使用するには、<a href="../kmz80web.html?debug=1">kmz80web.html?debug=1</a>にアクセスして下さい。
+次のような画面になるはずです。</p>
+<div><img src="debug.png" alt="kmz80web07" /></div>
+<p>「Step」を押すか、「Stop at」を押してブレークポイントを設定し、設定したアドレスに到達すると、以下のように表示が変わります。</p>
+<div><img src="step.png" alt="kmz80web07" /></div>
+<p>「Step」を押すたびに、Z80命令を一つずつ実行します。
+ステップ実行から抜けたいときは、「Cont」を押してください。
+「Log to」を押してアドレスを設定すると、そのアドレスに到達するまで実行し、そのログを下に表示します。
+「Dump」を押すと、指定したアドレスのHexダンプが表示されます。</p>
+<p></p>
+<p>起動時のパラメーターは、?debug=1以外に ?start=スタートアドレス ?dumplist=1 ?ramsize=RAMサイズ(KB単位) ?worker=1 があります。</p>
+</body>
+</html>

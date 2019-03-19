@@ -1,0 +1,169 @@
+/*
+   This program is provided under the LGPL license ver 2.
+   Written by Katsumi.
+   http://hp.vector.co.jp/authors/VA016157/
+   kmorimatsu@users.sourceforge.jp
+*/
+
+#include "main.h"
+
+/*
+T5CK              RB14 (connected to RB2, REFCLKO)
+T3CK              RA1  (connected to RB2, REFCLKO)
+sound(OC1)        RA0
+
+Timer3: 
+	Emulates 8253 timer 0 using 2 Mhz input from T3CK (RA1 pin). 
+	Prescaler=1:1. Use OC1 with toggle mode.
+Timer5: 
+	Emulates 8253 timer 1 using 2 Mhz input from T5CK (RB14 pin). 
+	Prescaller=1:64, resulting in 31.25 Khz.
+*/
+
+/*	global variables
+*/
+static unsigned int g_countTimer2;
+static unsigned int g_cacheTimer0,g_cacheTimer1,g_cacheTimer2;
+static unsigned int g_lsbTimer0,g_lsbTimer1,g_lsbTimer2;
+
+void init8253(){
+	// Timer5 (of PIC) setting
+	TMR5=0;
+	ANSELBbits.ANSB14=0;// Degital input from RB14
+	TRISBbits.TRISB14=1;// input from RB14
+	T5CKR=1;            // input from RB14
+	T5CONbits.TCKPS=6;  // 1:64 prescaler for 31.25 kHz
+	T5CONbits.TCS=1;    // Use T5CK
+	T5CONbits.SIDL=1;   // Stop in idle mode
+	T5CONbits.ON=1;     // 8253 timer 1 is always working.
+	// Do not use interrupt by Timer5.
+	// See timer1Int() in main.c.
+	IFS0bits.T5IF=0;
+	// See init_cmt() for Timer3 and OC1 settings
+}
+
+void inc8253timer2(){
+	IFS0bits.T5IF=0;
+	g_countTimer2--;
+	if (g_countTimer2) return;
+	g_countTimer2=0x00010000;
+	// Interrupt on Z80 CPU
+	intZ80(0xff);
+}
+
+unsigned char read8253(unsigned int addr){
+	switch(addr&0x03){
+		case 0:
+			if (g_lsbTimer0) {
+				g_lsbTimer0=0;
+				g_cacheTimer0=PR3-TMR3+1;
+				return g_cacheTimer0 & 0xFF;
+			} else {
+				g_lsbTimer0=1;
+				return (g_cacheTimer0>>8) & 0xFF;
+			}
+		case 1:
+			if (g_lsbTimer1) {
+				g_lsbTimer1=0;
+				g_cacheTimer1=0xffff-TMR5+1;
+				return g_cacheTimer1 & 0xFF;		
+			} else {
+				g_lsbTimer1=1;
+				return (g_cacheTimer1>>8) & 0xFF;
+			}
+		case 2:
+			if (g_lsbTimer2) {
+				g_lsbTimer2=0;
+				g_cacheTimer2=g_countTimer2;
+				return g_cacheTimer2 & 0xFF;		
+			} else {
+				g_lsbTimer2=1;
+				return (g_cacheTimer2>>8) & 0xFF;
+			}
+		default:
+			return 0;
+	}
+}
+
+void write8253(unsigned int addr, unsigned char data){
+	unsigned int i32;
+	switch(addr&0x03){
+		case 0:
+			if (g_lsbTimer0) {
+				g_lsbTimer0=0;
+				g_cacheTimer0=data;
+				return;
+			} else {
+				/*	8253 mode 2:
+					When the timer in 8253 is, for example, set to 5, the 8253 counter changes as follows:
+					5, 4, 3, 2, 1, 5, 4, 3, 2, 1, 5, 4, 3, 2, 1, 5, 4, 3, 2, 1, ...
+					OUT is L when counter=1, otherwise, it is H.
+					On the other hand, when PR3 is, for example, set to 4, TMR3 changes as follows:
+					0, 1, 2, 3, 4, 0, 1, 2, 3, 4, ...
+					Therefore, PR3 will be set as follows:
+					PR3=value-1;
+					Counter can be read as follows:
+					value=PR3-TMR3+1;
+				*/
+				g_lsbTimer0=1;
+				i32=data;
+				i32<<=8;
+				i32|=g_cacheTimer0;
+				PR3=i32-1;
+				return;
+			}
+		case 1:
+				/* 8253 mode 0:
+					Then the timer reach zero, it will be always 0xffff after this event.
+					Therefore, the PR5 is fixed at 0xffff.
+					Writing valut changes TMR5 instead of PR5.
+				*/
+			if (g_lsbTimer1) {
+				g_lsbTimer1=0;
+				g_cacheTimer1=data;
+				return;
+			} else {
+				g_lsbTimer1=1;
+				i32=data;
+				i32<<=8;
+				i32|=g_cacheTimer1;
+				i32=0xffff-i32;
+				TMR5=i32;
+				return;
+			}
+		case 2:
+				/* 8253 mode 0:
+					This timer is emulated by software.
+				*/
+			if (g_lsbTimer2) {
+				g_lsbTimer2=0;
+				g_cacheTimer2=data;
+				return;
+			} else {
+				g_lsbTimer2=1;
+				i32=data;
+				i32<<=8;
+				i32|=g_cacheTimer2;
+				g_countTimer2=i32;
+				return;
+			}
+		default:
+			switch(data&0xC0){
+				case 0x00:
+					g_lsbTimer0=1;
+					g_cacheTimer0=PR3-TMR3+1;
+					return;
+				case 0x40:
+					g_lsbTimer1=1;
+					g_cacheTimer1=0xffff-TMR5+1;
+ 					return;
+				case 0x80:
+					g_lsbTimer2=1;
+					g_cacheTimer2=g_countTimer2;
+					return;
+				default:
+					return;
+			}
+	}
+}
+

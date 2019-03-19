@@ -1,0 +1,32 @@
+/*******************************
+* ZK-80 web written by Katsumi *
+*    This script is released   *
+*      under the LGPL v2.1.    *
+*******************************/
+
+body {
+	background: #045a4b;
+	width: 320px;
+}
+span {
+	background: #045a4b;
+	color: #ffffff;
+}
+img {
+	vertical-align: middle;
+	cursor:pointer;
+}
+div {
+	text-align: center;
+}
+#save {
+	display:none;
+}
+.debug {
+	display:none;
+	background: #fff;
+	color: #000;
+	width: 320px;
+	font-size: small;
+}
+

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="UTF-8" />
+	<title>ZK-80 web の使い方</title>
+	<style type="text/css">
+	<!--
+		body {
+			width: 640px;
+		}
+		div {
+			text-align: center;
+		}
+		table, th, td {
+			border: 1px #0000C0 solid;
+		}
+		table {
+			margin-left:auto;
+			margin-right:auto;
+		}
+		a {
+			text-decoration: none;
+		}
+	-->
+	</style>
+</head>
+<body>
+<p>ZK-80 webは、HTML5による、NEC TK-80のエミュレーターです。</p>
+<p>HTML5の機能のうち使用しているものは、以下の通りです。</p>
+<ul>
+<li>Canvas</li>
+<li>File Reader</li>
+<li>Multimedia (audio player)</li>
+<li>Web Strage</li>
+</ul>
+<p>これら３つの機能がすべてそろっている環境（FireFoxやChromeなど）での使用が理想的です。
+が、HTML5の基本機能のCanvasが扱えれば、ほとんどの機能が使えます。</p>
+<p>なお、ダウンロード後のPC上のローカルのファイルをブラウザで開いた場合、環境により(Chromeなど)正常に動作しません。
+この場合、サーバーにファイルを転送してからアクセスするか、FireFoxなどローカルファイルでも動作するブラウザを用いてください。</p>
+<p><a href="../zk80web.html">zk80web.html</a>にブラウザでアクセスすると、以下のように表示されます。</p>
+<div><img src="snapshot.jpg" alt="snapshot" width="316" height="420" /></div>
+<p>使い方はオリジナルのTK-80とほとんど同じなので、詳細はここでは割愛します
+（0x8000からのメモリーに機械語でプログラムを入力して、「RUN」キーで実行することになります;
+<a href="../z80v097.html">添付のアセンブラー</a>が使えます）。</p>
+<p>以下のサブルーチンが使えます。これらの使い方については、
+<a href="http://www.st.rim.or.jp/~nkomatsu/evakit/TK80.html">小松さんの「NEC TK-80」というページ</a>が詳しいです。</p>
+<table>
+<tr><th>名称</th><th>アドレス</th><th>機能</th></tr>
+<tr><td>RGDSP</td><td>01A1</td><td>アドレス・データレジスタ表示</td></tr>
+<tr><td>SEGCG</td><td>01C0</td><td>セグメントデータ変換</td></tr>
+<tr><td>KEYIN</td><td>0216</td><td>キー入力(待あり)</td></tr>
+<tr><td>INPUT</td><td>0223</td><td>キー入力(待なし)</td></tr>
+<tr><td>D1</td><td>02DD</td><td>4.5 msタイマ</td></tr>
+<tr><td>D2</td><td>02EA</td><td>9.0 msタイマ</td></tr>
+<tr><td>D3</td><td>02EF</td><td>27 msタイマ</td></tr>
+</table>
+<p>ここでは、ZK-80 webに特異的な事象について、説明します。</p>
+<ul>
+<li>CPUとして、Z80か8080Aかを選択可能です。
+デフォルトはZ80です。
+8080Aを使用したい場合は、<a href="../zk80web.html?cpu=i8080">zk80web.html?cpu=i8080</a>にアクセスしてください。
+Z80は、一部の命令で消費クロック数が若干異なる以外は8080Aのアッパーコンパチブルですので、8080用に書いたプログラムがそのまま動くはずです。</li>
+<li>モニタープログラムは、ZK-80用に書いた専用のものを用いています。ただし、上記で説明したサブルーチンは、同じように使えます。</li>
+<li>アドレス空間は、0x0000-0x02ffの768 bytesがROM、0x8000-0xffffの32 kbytesがRAMです。</li>
+<li>プログラムのロードとストアは、カセットテープインターフェースではなくブラウザでバイナリファイルを扱うことで行われます。</li>
+<li>操作は、基本的には画面上の画像をクリックして行いますが、次のホットキーも使えます。
+<table>
+<tr><th>機能</th><th>キー</th></tr>
+<tr><td>0-9, A-F</td><td>0-9, A-F</td></tr>
+<tr><td>RET</td><td>R</td></tr>
+<tr><td>RUN</td><td>G</td></tr>
+<tr><td>STORE DATA</td><td>S</td></tr>
+<tr><td>LOAD DATA</td><td>L</td></tr>
+<tr><td>RESET</td><td>ESC</td></tr>
+<tr><td>ADRS SET</td><td>X</td></tr>
+<tr><td>READ INCR</td><td>SPACE,↓,→,+(テンキー)</td></tr>
+<tr><td>READ DECR</td><td>M,↑,←,-(テンキー)</td></tr>
+<tr><td>WRITE INCR</td><td>ENTER</td></tr>
+<tr><td>STEP/AUTO切替え</td><td>T,TAB</td></tr>
+<tr><td>PROTECT/ENABLE切替え</td><td>P</td></tr>
+</table>
+</li>
+<li>ステップ実行中にIX、IYレジスタの内容を見たい場合、0x0004番地を実行してください（CPUにZ80を利用しているときのみ）。
+左にIXレジスタ、右にIYレジスタの内容が表示されます。</li>
+<li>色々隠し機能があります。
+たとえば、「
+<a href="../zk80web.html?clock=20k">zk80web.html?clock=20k</a>
+」にアクセスすると、20 kHzのクロックで動きますので、モバイルなど動作の遅い環境で有用だと思われます（ただし、上記のサブルーチン、D1-D3の待ち時間は変わりません）。
+main.jsを覗けば、他の隠し機能に関する情報も得られるでしょう。</li>
+</ul>
+<p>なお、バージョン0.3以降で使用しているインターフェースの画像（キーボード、LED、トグルスイッチ）及び操作音は、
+<a href="http://triring.net/">triring</a>
+さんに頂いたものを修正して用いています。
+LGPLにコンパチブルなライセンスで、これらのリソースを供与して頂きました。
+どうも有り難うございます。</p>
+<p>バージョン履歴</p>
+<ul>
+<li>Ver 0.2
+最初の公開バージョン。</li>
+<li>Ver 0.3
+ステップ実行に対応。
+キー、LED、トグルスイッチの画像に、実際のTK-80のものを修正して使用。
+キーとトグルスイッチの効果音を追加。
+</li>
+<li>Ver 0.4
+CPUとしてZ80か8080かを選択可能に。
+ホットキーの割り当てを変更。
+I/O操作によるLEDの消灯に対応。
+I/OアドレスをTK-80と同じものに変更。
+モニタープログラムを8080対応に。
+モニタープログラムのバグを修正（タイマーの呼び出しアドレスを0x022dから0x02ddに）。
+モニタープログラムのバグを修正（LED表示後の不正なメモリー書き込みを回避）。
+IX/IYレジスタ表示ルーチンの呼び出しアドレスを変更。
+PROTECT/ENABEトグルスイッチ及びメモリバックアップ機能に対応。</li>
+</ul>
+</body>
+</html>
