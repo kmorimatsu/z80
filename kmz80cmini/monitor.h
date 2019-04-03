@@ -1,8 +1,9 @@
 /*
-   ALthough the other files are provided under the LGPL license,
+   Although the other files are provided under the LGPL license,
    this file is not.
    Musashino micro-computer club has the copy right of this file.
-   Please ask the club or Katsumi for the detail of license.
+   Please see following web page for license of this data.
+   http://retropc.net/mz-memories/mz700/kyodaku.html
 */
 
 const unsigned char monitor[]={

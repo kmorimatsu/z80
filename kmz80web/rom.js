@@ -1,6 +1,8 @@
 /*
 	Monitor program containing 1024 bytes data.
 	Note that this code IS NOT provided with LGPL license.
+	Please see following web page for license of this data.
+	http://retropc.net/mz-memories/mz700/kyodaku.html
 */
 memory.rom=[
 0xc3,0x4a,0x00,0xc3,0xe6,0x07,0xc3,0x0e,0x09,0xc3,0x18,0x09,0xc3,0x20,0x09,0xc3,
