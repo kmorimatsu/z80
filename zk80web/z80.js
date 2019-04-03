@@ -201,7 +201,7 @@ z80.loadI=function(x){
 	this.regI=x&0xff;
 };
 z80.loadR=function(x){
-	this.regR=x&0xff;
+	this.regR=x&0x7f;
 };
 z80.loadIXh=function(x){
 	this.regIXh=x&0xff;
@@ -5037,12 +5037,16 @@ z80.exec=function(msec){
 			this.codeVector[code]();
 			if (this.irq) this.doInt();
 			if (this.step) return;
+			// Increment R register here
+			this.loadR(this.regR+1);
 		}
 		this.clk-=this.speed;
 		this.events();
 	}
 };
 z80.codeCB=function(){
+	// Increment R register here
+	this.loadR(this.regR+1);
 	try {
 		this.codeCBVector[this.getCode()]();
 	} catch(e) {
@@ -5051,6 +5055,8 @@ z80.codeCB=function(){
 	}
 };
 z80.codeDD=function(){
+	// Increment R register here
+	this.loadR(this.regR+1);
 	try {
 		this.codeDDVector[this.getCode()]();
 	} catch(e) {
@@ -5059,6 +5065,8 @@ z80.codeDD=function(){
 	}
 };
 z80.codeED=function(){
+	// Increment R register here
+	this.loadR(this.regR+1);
 	try {
 		this.codeEDVector[this.getCode()]();
 	} catch(e) {
@@ -5067,6 +5075,8 @@ z80.codeED=function(){
 	}
 };
 z80.codeFD=function(){
+	// Increment R register here
+	this.loadR(this.regR+1);
 	try {
 		this.codeFDVector[this.getCode()]();
 	} catch(e) {
