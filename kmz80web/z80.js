@@ -1,8 +1,9 @@
-/********************************
-* KM-Z80 web written by Katsumi *
-*    This script is released    *
-*      under the LGPL v2.1.     *
-********************************/
+/**********************************
+* Z80 emulator written by Katsumi *
+*           ver 0.80              *
+*     This script is released     *
+*       under the LGPL v2.1.      *
+**********************************/
 
 /*
 	Public methods:
@@ -10,7 +11,7 @@
 	z80.setSpeed(clk);
 	z80.getMicroSec();
 	z80.exec(msec);
-	z80.interrupt();
+	z80.interrupt(code);
 	z80.nmr();
 	
 	Required outside methods:
@@ -24,6 +25,7 @@
 z80=new Object();
 z80.breakPoint=-1;
 z80.step=0;
+z80.m1=false;
 z80.reset=function(){
 	// 8 bit registers
 	this.z80IM=0;
@@ -72,11 +74,13 @@ z80.reset=function(){
 	this.irq=0;
 	this.nrq=0;
 };
-z80.interrupt=function(){
+z80.intCode=0xff;
+z80.interrupt=function(code){
 	if (!this.flagIFF1) return;
 	this.loadIFF1(0);
 	this.loadIFF2(0);
 	this.irq=1;
+	this.intCode=code;
 };
 z80.nmr=function(){
 	this.loadIFF1(0);
@@ -94,11 +98,22 @@ z80.doInt=function(){
 		this.loadPC(0x0066);
 	} else {
 		// Mascable interrupt
-		if (this.regIM!=1) {
-			alert("Mode "+this.regIM+" interrupt is not supported.");
-			return;
+		switch (this.regIM) {
+			case 0:
+				this.codeVector[this.intCode]();
+				return;
+			case 2:
+				var addr=(this.regI<<8)|this.intCode;
+				this.loadSP(this.regSP-2);
+				memory.write(this.regSP,this.regPC&0xFF);
+				memory.write(this.regSP+1,this.regPC>>8);
+				this.loadPC(memory.read(addr)|(memory.read(addr+1)<<8));
+				return;
+			case 1:
+			default:
+				this.codeFF();
+				return;
 		}
-		this.codeFF();
 	}
 };
 z80.speed=2000; // Default: 2 MHz
@@ -113,25 +128,32 @@ z80.events=function(){
 	// The events function will be called every msec.
 	// Override this function if required to use.
 }
+
 z80.clk=0;
-z80.setT4= function(){ this.clk+=4; }
-z80.setT5= function(){ this.clk+=5; }
-z80.setT6= function(){ this.clk+=6; }
-z80.setT7= function(){ this.clk+=7; }
-z80.setT8= function(){ this.clk+=8; }
-z80.setT9= function(){ this.clk+=9; }
-z80.setT10=function(){ this.clk+=10; }
-z80.setT11=function(){ this.clk+=11; }
-z80.setT12=function(){ this.clk+=12; }
-z80.setT13=function(){ this.clk+=13; }
-z80.setT14=function(){ this.clk+=14; }
-z80.setT15=function(){ this.clk+=15; }
-z80.setT16=function(){ this.clk+=16; }
-z80.setT17=function(){ this.clk+=17; }
-z80.setT19=function(){ this.clk+=19; }
-z80.setT20=function(){ this.clk+=20; }
-z80.setT21=function(){ this.clk+=21; }
-z80.setT23=function(){ this.clk+=23; }
+z80.setT4=    function(){ this.clk+=4; }
+z80.setT4_5=  function(){ this.clk+=4; }
+z80.setT4_7=  function(){ this.clk+=4; }
+z80.setT5=    function(){ this.clk+=5; }
+z80.setT6=    function(){ this.clk+=6; }
+z80.setT6_5=  function(){ this.clk+=6; }
+z80.setT7=    function(){ this.clk+=7; }
+z80.setT8=    function(){ this.clk+=8; }
+z80.setT9=    function(){ this.clk+=9; }
+z80.setT10=   function(){ this.clk+=10; }
+z80.setT10_11=function(){ this.clk+=10; }
+z80.setT11=   function(){ this.clk+=11; }
+z80.setT11_10=function(){ this.clk+=11; }
+z80.setT12=   function(){ this.clk+=12; }
+z80.setT13=   function(){ this.clk+=13; }
+z80.setT14=   function(){ this.clk+=14; }
+z80.setT15=   function(){ this.clk+=15; }
+z80.setT16=   function(){ this.clk+=16; }
+z80.setT17=   function(){ this.clk+=17; }
+z80.setT19=   function(){ this.clk+=19; }
+z80.setT19_18=function(){ this.clk+=19; }
+z80.setT20=   function(){ this.clk+=20; }
+z80.setT21=   function(){ this.clk+=21; }
+z80.setT23=   function(){ this.clk+=23; }
 
 z80.loadA=function(x){
 	this.regA=x&0xff;
@@ -179,7 +201,7 @@ z80.loadI=function(x){
 	this.regI=x&0xff;
 };
 z80.loadR=function(x){
-	this.regR=x&0xff;
+	this.regR=x&0x7f;
 };
 z80.loadIXh=function(x){
 	this.regIXh=x&0xff;
@@ -303,19 +325,19 @@ z80.code02=function(){
 z80.code03=function(){
 	//INC BC
 	//Note that 16-bit increment routine does not change flags.
-	this.setT6();
+	this.setT6_5();
 	this.loadBC(this.regBC+1);
 };
 z80.code04=function(){
 	//INC B
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regB+1;
 	this.loadB(i8);
 	this.flag8inc(i8);
 };
 z80.code05=function(){
 	//DEC B
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regB-1;
 	this.loadB(i8);
 	this.flag8dec(i8);
@@ -355,7 +377,7 @@ z80.code08=function(){
 };
 z80.code09=function(){
 	//ADD HL,BC
-	this.setT11();
+	this.setT11_10();
 	this.z80ADD16(this.regBC);
 };
 z80.code0A=function(){
@@ -365,19 +387,19 @@ z80.code0A=function(){
 };
 z80.code0B=function(){
 	//DEC BC
-	this.setT6();
+	this.setT6_5();
 	this.loadBC(this.regBC-1);
 };
 z80.code0C=function(){
 	//INC C
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regC+1;
 	this.loadC(i8);
 	this.flag8inc(i8);
 };
 z80.code0D=function(){
 	//DEC C
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regC-1;
 	this.loadC(i8);
 	this.flag8dec(i8);
@@ -434,19 +456,19 @@ z80.code12=function(){
 };
 z80.code13=function(){
 	//INC DE
-	this.setT6();
+	this.setT6_5();
 	this.loadDE(this.regDE+1);
 };
 z80.code14=function(){
 	//INC D
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regD+1;
 	this.loadD(i8);
 	this.flag8inc(i8);
 };
 z80.code15=function(){
 	//DEC D
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regD-1;
 	this.loadD(i8);
 	this.flag8dec(i8);
@@ -482,7 +504,7 @@ z80.code18=function(){
 };
 z80.code19=function(){
 	//ADD HL,DE
-	this.setT11();
+	this.setT11_10();
 	this.z80ADD16(this.regDE);
 };
 z80.code1A=function(){
@@ -492,19 +514,19 @@ z80.code1A=function(){
 };
 z80.code1B=function(){
 	//DEC DE
-	this.setT6();
+	this.setT6_5();
 	this.loadDE(this.regDE-1);
 };
 z80.code1C=function(){
 	//INC E
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regE+1;
 	this.loadE(i8);
 	this.flag8inc(i8);
 };
 z80.code1D=function(){
 	//DEC E
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regE-1;
 	this.loadE(i8);
 	this.flag8dec(i8);
@@ -560,19 +582,19 @@ z80.code22=function(){
 };
 z80.code23=function(){
 	//INC HL
-	this.setT6();
+	this.setT6_5();
 	this.loadHL(this.regHL+1);
 };
 z80.code24=function(){
 	//INC H
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regH+1;
 	this.loadH(i8);
 	this.flag8inc(i8);
 };
 z80.code25=function(){
 	//DEC H
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regH-1;
 	this.loadH(i8);
 	this.flag8dec(i8);
@@ -736,7 +758,7 @@ z80.code28=function(){
 };
 z80.code29=function(){
 	//ADD HL,HL
-	this.setT11();
+	this.setT11_10();
 	this.z80ADD16(this.regHL);
 };
 z80.code2A=function(){
@@ -750,19 +772,19 @@ z80.code2A=function(){
 };
 z80.code2B=function(){
 	//DEC HL
-	this.setT6();
+	this.setT6_5();
 	this.loadHL(this.regHL-1);
 };
 z80.code2C=function(){
 	//INC L
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regL+1;
 	this.loadL(i8);
 	this.flag8inc(i8);
 };
 z80.code2D=function(){
 	//DEC L
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regL-1;
 	this.loadL(i8);
 	this.flag8dec(i8);
@@ -815,19 +837,19 @@ z80.code32=function(){
 };
 z80.code33=function(){
 	//INC SP
-	this.setT6();
+	this.setT6_5();
 	this.loadSP(this.regSP+1);
 };
 z80.code34=function(){
 	//INC (HL)
-	this.setT11();
+	this.setT11_10();
 	var i8=memory.read(this.regHL)+1;
 	memory.write(this.regHL,i8);
 	this.flag8inc(i8);
 };
 z80.code35=function(){
 	//DEC (HL)
-	this.setT11();
+	this.setT11_10();
 	var i8=memory.read(this.regHL)-1;
 	memory.write(this.regHL,i8);
 	this.flag8dec(i8);
@@ -864,7 +886,7 @@ z80.code38=function(){
 };
 z80.code39=function(){
 	//ADD HL,SP
-	this.setT11();
+	this.setT11_10();
 	this.z80ADD16(this.regSP);
 };
 z80.code3A=function(){
@@ -877,19 +899,19 @@ z80.code3A=function(){
 };
 z80.code3B=function(){
 	//DEC SP
-	this.setT6();
+	this.setT6_5();
 	this.loadSP(this.regSP-1);
 };
 z80.code3C=function(){
 	//INC A
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regA+1;
 	this.loadA(i8);
 	this.flag8inc(i8);
 };
 z80.code3D=function(){
 	//DEC A
-	this.setT4();
+	this.setT4_5();
 	var i8=this.regA-1;
 	this.loadA(i8);
 	this.flag8dec(i8);
@@ -921,32 +943,32 @@ C is set if CY was 0 before operation; reset otherwise
 };
 z80.code40=function(){
 	//LD B,B
-	this.setT4();
+	this.setT4_5();
 	this.loadB(this.regB);
 };
 z80.code41=function(){
 	//LD B,C
-	this.setT4();
+	this.setT4_5();
 	this.loadB(this.regC);
 };
 z80.code42=function(){
 	//LD B,D
-	this.setT4();
+	this.setT4_5();
 	this.loadB(this.regD);
 };
 z80.code43=function(){
 	//LD B,E
-	this.setT4();
+	this.setT4_5();
 	this.loadB(this.regE);
 };
 z80.code44=function(){
 	//LD B,H
-	this.setT4();
+	this.setT4_5();
 	this.loadB(this.regH);
 };
 z80.code45=function(){
 	//LD B,L
-	this.setT4();
+	this.setT4_5();
 	this.loadB(this.regL);
 };
 z80.code46=function(){
@@ -956,37 +978,37 @@ z80.code46=function(){
 };
 z80.code47=function(){
 	//LD B,A
-	this.setT4();
+	this.setT4_5();
 	this.loadB(this.regA);
 };
 z80.code48=function(){
 	//LD C,B
-	this.setT4();
+	this.setT4_5();
 	this.loadC(this.regB);
 };
 z80.code49=function(){
 	//LD C,C
-	this.setT4();
+	this.setT4_5();
 	this.loadC(this.regC);
 };
 z80.code4A=function(){
 	//LD C,D
-	this.setT4();
+	this.setT4_5();
 	this.loadC(this.regD);
 };
 z80.code4B=function(){
 	//LD C,E
-	this.setT4();
+	this.setT4_5();
 	this.loadC(this.regE);
 };
 z80.code4C=function(){
 	//LD C,H
-	this.setT4();
+	this.setT4_5();
 	this.loadC(this.regH);
 };
 z80.code4D=function(){
 	//LD C,L
-	this.setT4();
+	this.setT4_5();
 	this.loadC(this.regL);
 };
 z80.code4E=function(){
@@ -996,37 +1018,37 @@ z80.code4E=function(){
 };
 z80.code4F=function(){
 	//LD C,A
-	this.setT4();
+	this.setT4_5();
 	this.loadC(this.regA);
 };
 z80.code50=function(){
 	//LD D,B
-	this.setT4();
+	this.setT4_5();
 	this.loadD(this.regB);
 };
 z80.code51=function(){
 	//LD D,C
-	this.setT4();
+	this.setT4_5();
 	this.loadD(this.regC);
 };
 z80.code52=function(){
 	//LD D,D
-	this.setT4();
+	this.setT4_5();
 	this.loadD(this.regD);
 };
 z80.code53=function(){
 	//LD D,E
-	this.setT4();
+	this.setT4_5();
 	this.loadD(this.regE);
 };
 z80.code54=function(){
 	//LD D,H
-	this.setT4();
+	this.setT4_5();
 	this.loadD(this.regH);
 };
 z80.code55=function(){
 	//LD D,L
-	this.setT4();
+	this.setT4_5();
 	this.loadD(this.regL);
 };
 z80.code56=function(){
@@ -1036,37 +1058,37 @@ z80.code56=function(){
 };
 z80.code57=function(){
 	//LD D,A
-	this.setT4();
+	this.setT4_5();
 	this.loadD(this.regA);
 };
 z80.code58=function(){
 	//LD E,B
-	this.setT4();
+	this.setT4_5();
 	this.loadE(this.regB);
 };
 z80.code59=function(){
 	//LD E,C
-	this.setT4();
+	this.setT4_5();
 	this.loadE(this.regC);
 };
 z80.code5A=function(){
 	//LD E,D
-	this.setT4();
+	this.setT4_5();
 	this.loadE(this.regD);
 };
 z80.code5B=function(){
 	//LD E,E
-	this.setT4();
+	this.setT4_5();
 	this.loadE(this.regE);
 };
 z80.code5C=function(){
 	//LD E,H
-	this.setT4();
+	this.setT4_5();
 	this.loadE(this.regH);
 };
 z80.code5D=function(){
 	//LD E,L
-	this.setT4();
+	this.setT4_5();
 	this.loadE(this.regL);
 };
 z80.code5E=function(){
@@ -1076,37 +1098,37 @@ z80.code5E=function(){
 };
 z80.code5F=function(){
 	//LD E,A
-	this.setT4();
+	this.setT4_5();
 	this.loadE(this.regA);
 };
 z80.code60=function(){
 	//LD H,B
-	this.setT4();
+	this.setT4_5();
 	this.loadH(this.regB);
 };
 z80.code61=function(){
 	//LD H,C
-	this.setT4();
+	this.setT4_5();
 	this.loadH(this.regC);
 };
 z80.code62=function(){
 	//LD H,D
-	this.setT4();
+	this.setT4_5();
 	this.loadH(this.regD);
 };
 z80.code63=function(){
 	//LD H,E
-	this.setT4();
+	this.setT4_5();
 	this.loadH(this.regE);
 };
 z80.code64=function(){
 	//LD H,H
-	this.setT4();
+	this.setT4_5();
 	this.loadH(this.regH);
 };
 z80.code65=function(){
 	//LD H,L
-	this.setT4();
+	this.setT4_5();
 	this.loadH(this.regL);
 };
 z80.code66=function(){
@@ -1116,37 +1138,37 @@ z80.code66=function(){
 };
 z80.code67=function(){
 	//LD H,A
-	this.setT4();
+	this.setT4_5();
 	this.loadH(this.regA);
 };
 z80.code68=function(){
 	//LD L,B
-	this.setT4();
+	this.setT4_5();
 	this.loadL(this.regB);
 };
 z80.code69=function(){
 	//LD L,C
-	this.setT4();
+	this.setT4_5();
 	this.loadL(this.regC);
 };
 z80.code6A=function(){
 	//LD L,D
-	this.setT4();
+	this.setT4_5();
 	this.loadL(this.regD);
 };
 z80.code6B=function(){
 	//LD L,E
-	this.setT4();
+	this.setT4_5();
 	this.loadL(this.regE);
 };
 z80.code6C=function(){
 	//LD L,H
-	this.setT4();
+	this.setT4_5();
 	this.loadL(this.regH);
 };
 z80.code6D=function(){
 	//LD L,L
-	this.setT4();
+	this.setT4_5();
 	this.loadL(this.regL);
 };
 z80.code6E=function(){
@@ -1156,7 +1178,7 @@ z80.code6E=function(){
 };
 z80.code6F=function(){
 	//LD L,A
-	this.setT4();
+	this.setT4_5();
 	this.loadL(this.regA);
 };
 z80.code70=function(){
@@ -1191,7 +1213,7 @@ z80.code75=function(){
 };
 z80.code76=function(){
 	//HALT
-	this.setT4();
+	this.setT4_7();
 	this.loadPC(this.regPC-1);
 };
 z80.code77=function(){
@@ -1201,32 +1223,32 @@ z80.code77=function(){
 };
 z80.code78=function(){
 	//LD A,B
-	this.setT4();
+	this.setT4_5();
 	this.loadA(this.regB);
 };
 z80.code79=function(){
 	//LD A,C
-	this.setT4();
+	this.setT4_5();
 	this.loadA(this.regC);
 };
 z80.code7A=function(){
 	//LD A,D
-	this.setT4();
+	this.setT4_5();
 	this.loadA(this.regD);
 };
 z80.code7B=function(){
 	//LD A,E
-	this.setT4();
+	this.setT4_5();
 	this.loadA(this.regE);
 };
 z80.code7C=function(){
 	//LD A,H
-	this.setT4();
+	this.setT4_5();
 	this.loadA(this.regH);
 };
 z80.code7D=function(){
 	//LD A,L
-	this.setT4();
+	this.setT4_5();
 	this.loadA(this.regL);
 };
 z80.code7E=function(){
@@ -1236,7 +1258,7 @@ z80.code7E=function(){
 };
 z80.code7F=function(){
 	//LD A,A
-	this.setT4();
+	this.setT4_5();
 	this.loadA(this.regA);
 };
 z80.code80=function(){
@@ -1598,7 +1620,7 @@ z80.codeC4=function(){
 	var i8=this.getCode();
 	var i16=this.getCode();
 	if (this.flagZ){
-		this.setT10();
+		this.setT10_11();
 	} else {
 		this.setT17();
 		this.loadSP(this.regSP-2);
@@ -1667,7 +1689,7 @@ z80.codeCC=function(){
 		memory.write(this.regSP+1,this.regPC>>8);
 		this.loadPC((i16<<8)|i8);
 	} else {
-		this.setT10();
+		this.setT10_11();
 	}
 };
 z80.codeCD=function(){
@@ -1722,7 +1744,7 @@ z80.codeD2=function(){
 };
 z80.codeD3=function(){
 	//OUT (n),A
-	this.setT11();
+	this.setT11_10();
 	io.write(this.getCode(),this.regA,this.regA);
 };
 z80.codeD4=function(){
@@ -1730,7 +1752,7 @@ z80.codeD4=function(){
 	var i8=this.getCode();
 	var i16=this.getCode();
 	if (this.flagC){
-		this.setT10();
+		this.setT10_11();
 	} else {
 		this.setT17();
 		this.loadSP(this.regSP-2);
@@ -1794,7 +1816,7 @@ z80.codeDA=function(){
 };
 z80.codeDB=function(){
 	//IN A,n
-	this.setT11();
+	this.setT11_10();
 	this.loadA(io.read(this.getCode(), this.regA));
 };
 z80.codeDC=function(){
@@ -1808,7 +1830,7 @@ z80.codeDC=function(){
 		memory.write(this.regSP+1,this.regPC>>8);
 		this.loadPC((i16<<8)|i8);
 	} else {
-		this.setT10();
+		this.setT10_11();
 	}
 };
 z80.codeDE=function(){
@@ -1853,7 +1875,7 @@ z80.codeE2=function(){
 };
 z80.codeE3=function(){
 	//EX    (SP),HL
-	this.setT19();
+	this.setT19_18();
 	var i16=memory.read(this.regSP+1)<<8;
 	i16|=memory.read(this.regSP);
 	memory.write(this.regSP,this.regL);
@@ -1865,7 +1887,7 @@ z80.codeE4=function(){
 	var i8=this.getCode();
 	var i16=this.getCode();
 	if (this.flagP){
-		this.setT10();
+		this.setT10_11();
 	} else {
 		this.setT17();
 		this.loadSP(this.regSP-2);
@@ -1909,7 +1931,7 @@ z80.codeE8=function(){
 };
 z80.codeE9=function(){
 	//JP    (HL)
-	this.setT4();
+	this.setT4_5();
 	this.loadPC(this.regHL);
 };
 z80.codeEA=function(){
@@ -1937,7 +1959,7 @@ z80.codeEC=function(){
 		memory.write(this.regSP+1,this.regPC>>8);
 		this.loadPC((i16<<8)|i8);
 	} else {
-		this.setT10();
+		this.setT10_11();
 	}
 };
 z80.codeEE=function(){
@@ -1992,7 +2014,7 @@ z80.codeF4=function(){
 	var i8=this.getCode();
 	var i16=this.getCode();
 	if (this.flagS){
-		this.setT10();
+		this.setT10_11();
 	} else {
 		this.setT17();
 		this.loadSP(this.regSP-2);
@@ -2036,7 +2058,7 @@ z80.codeF8=function(){
 };
 z80.codeF9=function(){
 	//LD    SP,HL
-	this.setT6();
+	this.setT6_5();
 	this.loadSP(this.regHL);
 };
 z80.codeFA=function(){
@@ -2063,7 +2085,7 @@ z80.codeFC=function(){
 		memory.write(this.regSP+1,this.regPC>>8);
 		this.loadPC((i16<<8)|i8);
 	} else {
-		this.setT10();
+		this.setT10_11();
 	}
 };
 z80.codeFE=function(){
@@ -5001,7 +5023,7 @@ for (i=16;i<256;i++) {
 	eval("z80.codeFDCBVector["+i+"]=function(i16){ z80.codeFDCB"+i.toString(16).toUpperCase()+"(i16); };");
 }
 z80.exec=function(msec){
-	var i;
+	var i,code;
 	for (i=msec;0<i;i--) {
 		while (this.clk<this.speed || this.step) {
 			if (this.regPC==this.breakPoint) {
@@ -5009,43 +5031,56 @@ z80.exec=function(msec){
 				this.step=1;
 				return;
 			}
-			this.codeVector[this.getCode()]();
+			this.m1=true;
+			code=this.getCode();
+			this.m1=false;
+			this.codeVector[code]();
 			if (this.irq) this.doInt();
 			if (this.step) return;
+			// Increment R register here
+			this.loadR(this.regR+1);
 		}
 		this.clk-=this.speed;
 		this.events();
 	}
 };
 z80.codeCB=function(){
+	// Increment R register here
+	this.loadR(this.regR+1);
 	try {
 		this.codeCBVector[this.getCode()]();
 	} catch(e) {
-		alert(e);
+		console.log(e);
 		this.codeVOID();
 	}
 };
 z80.codeDD=function(){
+	// Increment R register here
+	this.loadR(this.regR+1);
 	try {
 		this.codeDDVector[this.getCode()]();
 	} catch(e) {
-		alert(e);
+		console.log(e);
 		this.codeVOID();
 	}
 };
 z80.codeED=function(){
+	// Increment R register here
+	this.loadR(this.regR+1);
 	try {
 		this.codeEDVector[this.getCode()]();
 	} catch(e) {
-		alert(e);
+		console.log(e);
 		this.codeVOID();
 	}
 };
 z80.codeFD=function(){
+	// Increment R register here
+	this.loadR(this.regR+1);
 	try {
 		this.codeFDVector[this.getCode()]();
 	} catch(e) {
-		alert(e);
+		console.log(e);
 		this.codeVOID();
 	}
 };
@@ -5054,7 +5089,7 @@ z80.codeDDCB=function(){
 	try {
 		this.codeDDCBVector[this.getCode()](i16);
 	} catch(e) {
-		alert(e);
+		console.log(e);
 		this.codeVOID();
 	}
 };
@@ -5063,7 +5098,7 @@ z80.codeFDCB=function(){
 	try {
 		this.codeFDCBVector[this.getCode()](i16);
 	} catch(e) {
-		alert(e);
+		console.log(e);
 		this.codeVOID();
 	}
 };

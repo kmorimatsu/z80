@@ -1,8 +1,9 @@
-/********************************
-* KM-Z80 web written by Katsumi *
-*    This script is released    *
-*      under the LGPL v2.1.     *
-********************************/
+/**********************************
+* Z80 emulator written by Katsumi *
+*           ver 0.80              * 
+*     This script is released     *
+*       under the LGPL v2.1.      *
+**********************************/
 
 /*
 	Additional methods used for emulating Z80 CPU
