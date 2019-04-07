@@ -142,9 +142,10 @@ display.writeChar=function(ascii){
 			this.cursor=parseInt(this.cursor/80)*80+80;
 			break;
 		case 0x0b: // ^K
-			for(var i=this.cursor;i<parseInt(this.cursor/80)*80+80;i++){
+			/*for(var i=this.cursor;i<parseInt(this.cursor/80)*80+80;i++){
 				this.write(i,0x20);
-			}
+			}*/
+			if (80<=this.cursor) this.cursor-=80;
 			break;
 		case 0x0d: // ^M (CR)
 			this.cursor=parseInt(this.cursor/80)*80+80;
@@ -159,6 +160,15 @@ display.writeChar=function(ascii){
 			break;
 		case 0x1a: // ^Z
 			this.cls();
+			break;
+		case 0x1c: // ^\
+			this.cursor++;
+			break;
+		case 0x1d: // ^]
+			if (0<this.cursor) this.cursor--;
+			break;
+		case 0x1e: // ^^
+			this.cursor=0;
 			break;
 		default:
 			this.write(this.cursor,ascii);
